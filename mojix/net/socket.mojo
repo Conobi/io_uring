@@ -1,4 +1,4 @@
-from .syscalls import _socket, _bind, _listen
+from .syscalls import _socket, _bind, _listen, _socketpair
 from .types import (
     Backlog,
     AddrFamily,
@@ -16,7 +16,7 @@ from mojix.fd import OwnedFd, FileDescriptor
 fn socket(
     domain: AddrFamily,
     type: SocketType,
-) raises -> OwnedFd:
+) raises -> OwnedFd[False]:
     """Creates a socket.
     [Linux]: https://man7.org/linux/man-pages/man2/socket.2.html.
     """
@@ -28,7 +28,7 @@ fn socket(
     domain: AddrFamily,
     type: SocketType,
     protocol: Protocol,
-) raises -> OwnedFd:
+) raises -> OwnedFd[False]:
     """Creates a socket.
     [Linux]: https://man7.org/linux/man-pages/man2/socket.2.html.
     """
@@ -41,7 +41,7 @@ fn socket(
     type: SocketType,
     flags: SocketFlags,
     protocol: Protocol,
-) raises -> OwnedFd:
+) raises -> OwnedFd[False]:
     """Creates a socket.
     [Linux]: https://man7.org/linux/man-pages/man2/socket.2.html.
     """
@@ -55,7 +55,8 @@ fn bind[
     """Binds a socket to an address.
     [Linux]: https://man7.org/linux/man-pages/man2/bind.2.html.
     """
-    _bind(fd, addr.addr_stor())
+    stor = addr.addr_stor()
+    _bind(fd, stor)
 
 
 @always_inline
@@ -72,3 +73,14 @@ fn listen[Fd: FileDescriptor](fd: Fd, backlog: Backlog) raises:
     [Linux]: https://man7.org/linux/man-pages/man2/listen.2.html.
     """
     _listen(fd, backlog)
+
+
+@always_inline
+fn socketpair(
+    domain: AddrFamily,
+    type: SocketType,
+) raises -> Tuple[OwnedFd[False], OwnedFd[False]]:
+    """Creates a pair of connected sockets.
+    [Linux]: https://man7.org/linux/man-pages/man2/socketpair.2.html.
+    """
+    return _socketpair(domain, type, SocketFlags(), Protocol())
