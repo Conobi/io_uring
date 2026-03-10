@@ -8,7 +8,11 @@ from memory import UnsafePointer
 
 comptime __NR_clock_gettime = 228
 comptime __NR_nanosleep = 35
+comptime __NR_ioctl = 16
 comptime CLOCK_MONOTONIC = Int32(1)
+comptime FIONREAD: Int32 = 0x541B
+comptime TCFLSH: Int32 = 0x540B
+comptime TCIFLUSH: Int32 = 0
 comptime STDIN_FD: Int32 = 0
 comptime TOTAL_ROUNDS: Int = 5
 
@@ -29,6 +33,18 @@ fn nanosleep_ns(ns: Int64):
     _ = syscall[__NR_nanosleep, Int32](
         UnsafePointer(to=req), UnsafePointer(to=rem)
     )
+
+
+fn stdin_pending() -> Int32:
+    """Returns the number of bytes waiting in the stdin buffer."""
+    var n: Int32 = 0
+    _ = syscall[__NR_ioctl, Int32](STDIN_FD, FIONREAD, UnsafePointer(to=n))
+    return n
+
+
+fn flush_stdin():
+    """Discards any pending bytes in the stdin buffer."""
+    _ = syscall[__NR_ioctl, Int32](STDIN_FD, TCFLSH, TCIFLUSH)
 
 
 struct ReactionGame(CompletionHandler):
@@ -79,22 +95,31 @@ fn main() raises:
 
     var loop = EventLoop(ReactionGame(), sq_entries=8)
 
-    for i in range(TOTAL_ROUNDS):
-        print("Round", i + 1, "of", TOTAL_ROUNDS, "— get ready...")
+    var round = 0
+    while round < TOTAL_ROUNDS:
+        print("Round", round + 1, "of", TOTAL_ROUNDS, "— get ready...")
 
         # Random delay 2–5 seconds derived from current nanoseconds.
         var seed = clock_gettime_ns()
         var delay_ns = (seed % Int64(3_000_000_000)) + Int64(2_000_000_000)
         nanosleep_ns(delay_ns)
 
+        # Detect false start: Enter pressed during the wait.
+        if stdin_pending() > 0:
+            flush_stdin()
+            print("  False start! Round not counted.")
+            print()
+            continue
+
         loop._handler.start_ns = clock_gettime_ns()
         print("GO!")
-        loop.submit_read(Fd(unsafe_fd=STDIN_FD), buf_ptr, 64, UInt64(i))
+        loop.submit_read(Fd(unsafe_fd=STDIN_FD), buf_ptr, 64, UInt64(round))
         loop.poll(wait_nr=1)
 
         var elapsed = loop._handler.results[len(loop._handler.results) - 1]
         print("  ->", elapsed, "ms")
         print()
+        round += 1
 
     # Compute stats.
     var results = loop._handler.results.copy()
