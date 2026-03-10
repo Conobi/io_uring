@@ -98,6 +98,9 @@ fn main() raises:
 
     # Compute stats.
     var results = loop._handler.results.copy()
+    if len(results) == 0:
+        print("No results recorded.")
+        return
     var min_ms = results[0]
     var max_ms = results[0]
     var sum_ms: Int64 = 0
