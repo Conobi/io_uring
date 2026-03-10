@@ -7,6 +7,8 @@ TESTS=(
     tests/io_uring/test_buf.mojo
     tests/io_uring/test_net.mojo
     tests/mojix/net/test_socket.mojo
+    tests/event_loop/test_event_loop.mojo
+    tests/event_loop/test_event_loop_net.mojo
 )
 
 PASS=0
