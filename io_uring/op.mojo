@@ -24,7 +24,7 @@ from memory import UnsafePointer
 
 @always_inline
 fn _nop_data[
-    type: SQE, origin: MutableOrigin
+    type: SQE, origin: MutOrigin
 ](ref [origin]sqe: Sqe[type]) -> ref [origin] Sqe[type]:
     sqe.opcode = IoUringOp.NOP
     sqe.flags = IoUringSqeFlags.CQE_SKIP_SUCCESS
@@ -78,13 +78,13 @@ fn _prep_addr[
 
 
 trait SqeAttrs:
-    fn user_data(owned self, value: UInt64) -> Self:
+    fn user_data(var self, value: UInt64) -> Self:
         ...
 
-    fn personality(owned self, value: UInt16) -> Self:
+    fn personality(var self, value: UInt16) -> Self:
         ...
 
-    fn sqe_flags(owned self, flags: IoUringSqeFlags) -> Self:
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
         ...
 
 
@@ -93,24 +93,24 @@ trait Operation(SqeAttrs, Movable):
 
 
 @register_passable
-struct Accept[type: SQE, origin: MutableOrigin](Operation):
+struct Accept[type: SQE, origin: MutOrigin](Operation):
     """Accept a new connection on a socket, equivalent to `accept4(2)`."""
 
-    alias SINCE = 5.5
+    comptime SINCE = 5.5
 
-    var sqe: Pointer[Sqe[type], origin]
+    var sqe: Pointer[Sqe[Self.type], Self.origin]
 
     @always_inline
     fn __init__[
         Fd: IoUringFileDescriptor
-    ](out self, ref [origin]sqe: Sqe[type], fd: Fd):
-        self = Self(sqe, fd, UnsafePointer[c_void](), UnsafePointer[c_void]())
+    ](out self, ref [Self.origin]sqe: Sqe[Self.type], fd: Fd):
+        self = Self(sqe, fd, UnsafePointer[c_void, StaticConstantOrigin](unsafe_from_address=0), UnsafePointer[c_void, StaticConstantOrigin](unsafe_from_address=0))
 
     @always_inline
     fn __init__[
         Fd: IoUringFileDescriptor,
         Addr: SocketAddrMut,
-    ](out self, ref [origin]sqe: Sqe[type], fd: Fd, ref unsafe_addr: Addr):
+    ](out self, ref [Self.origin]sqe: Sqe[Self.type], fd: Fd, ref unsafe_addr: Addr):
         self = Self(
             sqe,
             fd,
@@ -123,10 +123,10 @@ struct Accept[type: SQE, origin: MutableOrigin](Operation):
         Fd: IoUringFileDescriptor,
     ](
         out self,
-        ref [origin]sqe: Sqe[type],
+        ref [Self.origin]sqe: Sqe[Self.type],
         fd: Fd,
-        addr_unsafe_ptr: UnsafePointer[c_void],
-        addr_len_unsafe_ptr: UnsafePointer[c_void],
+        addr_unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin],
+        addr_len_unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin],
     ):
         _prep_addr(
             sqe,
@@ -135,42 +135,42 @@ struct Accept[type: SQE, origin: MutableOrigin](Operation):
             Int(addr_unsafe_ptr),
             Int(addr_len_unsafe_ptr),
         )
-        self.sqe = Pointer.address_of(sqe)
+        self.sqe = Pointer(to=sqe)
 
     @always_inline("nodebug")
-    fn user_data(owned self, value: UInt64) -> Self:
+    fn user_data(var self, value: UInt64) -> Self:
         self.sqe[].user_data = value
         return self^
 
     @always_inline("nodebug")
-    fn personality(owned self, value: UInt16) -> Self:
+    fn personality(var self, value: UInt16) -> Self:
         self.sqe[].personality = value
         return self^
 
     @always_inline("nodebug")
-    fn sqe_flags(owned self, flags: IoUringSqeFlags) -> Self:
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
         self.sqe[].flags |= flags
         return self^
 
     @always_inline("nodebug")
-    fn socket_flags(owned self, flags: SocketFlags) -> Self:
-        _size_eq[__type_of(flags), UInt32]()
+    fn socket_flags(var self, flags: SocketFlags) -> Self:
+        _size_eq[type_of(flags), UInt32]()
         self.sqe[].op_flags = flags.value
         return self^
 
 
 @register_passable
-struct Connect[type: SQE, origin: MutableOrigin](Operation):
+struct Connect[type: SQE, origin: MutOrigin](Operation):
     """Connect a socket, equivalent to `connect(2)`."""
 
-    alias SINCE = 5.5
+    comptime SINCE = 5.5
 
-    var sqe: Pointer[Sqe[type], origin]
+    var sqe: Pointer[Sqe[Self.type], Self.origin]
 
     @always_inline
     fn __init__[
         Fd: IoUringFileDescriptor, Addr: SocketAddr
-    ](out self, ref [origin]sqe: Sqe[type], fd: Fd, *, ref unsafe_addr: Addr):
+    ](out self, ref [Self.origin]sqe: Sqe[Self.type], fd: Fd, *, ref unsafe_addr: Addr):
         _prep_addr(
             sqe,
             IoUringOp.CONNECT,
@@ -178,26 +178,26 @@ struct Connect[type: SQE, origin: MutableOrigin](Operation):
             Int(unsafe_addr.addr_unsafe_ptr()),
             UInt64(Addr.ADDR_LEN),
         )
-        self.sqe = Pointer.address_of(sqe)
+        self.sqe = Pointer(to=sqe)
 
     @always_inline("nodebug")
-    fn user_data(owned self, value: UInt64) -> Self:
+    fn user_data(var self, value: UInt64) -> Self:
         self.sqe[].user_data = value
         return self^
 
     @always_inline("nodebug")
-    fn personality(owned self, value: UInt16) -> Self:
+    fn personality(var self, value: UInt16) -> Self:
         self.sqe[].personality = value
         return self^
 
     @always_inline("nodebug")
-    fn sqe_flags(owned self, flags: IoUringSqeFlags) -> Self:
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
         self.sqe[].flags |= flags
         return self^
 
 
 @register_passable
-struct Nop[type: SQE, origin: MutableOrigin](Operation):
+struct Nop[type: SQE, origin: MutOrigin](Operation):
     """Do not perform any I/O.
     A no-op is more useful than may appear at first glance.
     For example, you could set `IOSQE_IO_DRAIN_BIT` using `sqe_flags()`,
@@ -206,12 +206,12 @@ struct Nop[type: SQE, origin: MutableOrigin](Operation):
     of the `io_uring` implementation itself.
     """
 
-    alias SINCE = 5.1
+    comptime SINCE = 5.1
 
-    var sqe: Pointer[Sqe[type], origin]
+    var sqe: Pointer[Sqe[Self.type], Self.origin]
 
     @always_inline
-    fn __init__(out self, ref [origin]sqe: Sqe[type]):
+    fn __init__(out self, ref [Self.origin]sqe: Sqe[Self.type]):
         _prep_rw(
             sqe,
             IoUringOp.NOP,
@@ -219,305 +219,305 @@ struct Nop[type: SQE, origin: MutableOrigin](Operation):
             0,
             0,
         )
-        self.sqe = Pointer.address_of(sqe)
+        self.sqe = Pointer(to=sqe)
 
     @always_inline("nodebug")
-    fn user_data(owned self, value: UInt64) -> Self:
+    fn user_data(var self, value: UInt64) -> Self:
         self.sqe[].user_data = value
         return self^
 
     @always_inline("nodebug")
-    fn personality(owned self, value: UInt16) -> Self:
+    fn personality(var self, value: UInt16) -> Self:
         self.sqe[].personality = value
         return self^
 
     @always_inline("nodebug")
-    fn sqe_flags(owned self, flags: IoUringSqeFlags) -> Self:
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
         self.sqe[].flags |= flags
         return self^
 
 
 @register_passable
-struct Read[type: SQE, origin: MutableOrigin](Operation):
+struct Read[type: SQE, origin: MutOrigin](Operation):
     """Read, equivalent to `pread(2)`."""
 
-    alias SINCE = 5.6
+    comptime SINCE = 5.6
 
-    var sqe: Pointer[Sqe[type], origin]
+    var sqe: Pointer[Sqe[Self.type], Self.origin]
 
     @always_inline
     fn __init__[
         Fd: IoUringFileDescriptor,
     ](
         out self,
-        ref [origin]sqe: Sqe[type],
+        ref [Self.origin]sqe: Sqe[Self.type],
         fd: Fd,
-        unsafe_ptr: UnsafePointer[c_void],
+        unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin],
         len: UInt,
     ):
         _prep_rw(
             sqe,
             IoUringOp.READ,
             fd,
-            Int(unsafe_ptr),
-            len,
+            UInt64(Int(unsafe_ptr)),
+            UInt32(len),
         )
-        self.sqe = Pointer.address_of(sqe)
+        self.sqe = Pointer(to=sqe)
 
     @always_inline("nodebug")
-    fn user_data(owned self, value: UInt64) -> Self:
+    fn user_data(var self, value: UInt64) -> Self:
         self.sqe[].user_data = value
         return self^
 
     @always_inline("nodebug")
-    fn personality(owned self, value: UInt16) -> Self:
+    fn personality(var self, value: UInt16) -> Self:
         self.sqe[].personality = value
         return self^
 
     @always_inline("nodebug")
-    fn sqe_flags(owned self, flags: IoUringSqeFlags) -> Self:
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
         self.sqe[].flags |= flags
         return self^
 
     @always_inline("nodebug")
-    fn ioprio(owned self, value: UInt16) -> Self:
+    fn ioprio(var self, value: UInt16) -> Self:
         self.sqe[].ioprio = value
         return self^
 
     @always_inline("nodebug")
-    fn offset(owned self, value: UInt64) -> Self:
+    fn offset(var self, value: UInt64) -> Self:
         self.sqe[].off_or_addr2_or_cmd_op = value
         return self^
 
     @always_inline("nodebug")
-    fn rw_flags(owned self, flags: ReadWriteFlags) -> Self:
-        _size_eq[__type_of(flags), UInt32]()
+    fn rw_flags(var self, flags: ReadWriteFlags) -> Self:
+        _size_eq[type_of(flags), UInt32]()
         self.sqe[].op_flags = flags.value
         return self^
 
     @always_inline("nodebug")
-    fn buf_group(owned self, value: UInt16) -> Self:
+    fn buf_group(var self, value: UInt16) -> Self:
         self.sqe[].buf_index_or_buf_group = value
         return self^
 
 
 @register_passable
-struct Recv[type: SQE, origin: MutableOrigin](Operation):
+struct Recv[type: SQE, origin: MutOrigin](Operation):
     """Receive a message from a socket, equivalent to `recv(2)`."""
 
-    alias SINCE = 5.6
+    comptime SINCE = 5.6
 
-    var sqe: Pointer[Sqe[type], origin]
+    var sqe: Pointer[Sqe[Self.type], Self.origin]
 
     @always_inline
     fn __init__[
         Fd: IoUringFileDescriptor,
     ](
         out self,
-        ref [origin]sqe: Sqe[type],
+        ref [Self.origin]sqe: Sqe[Self.type],
         fd: Fd,
-        unsafe_ptr: UnsafePointer[c_void],
+        unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin],
         len: UInt,
     ):
         _prep_rw(
             sqe,
             IoUringOp.RECV,
             fd,
-            Int(unsafe_ptr),
-            len,
+            UInt64(Int(unsafe_ptr)),
+            UInt32(len),
         )
-        self.sqe = Pointer.address_of(sqe)
+        self.sqe = Pointer(to=sqe)
 
     @always_inline("nodebug")
-    fn user_data(owned self, value: UInt64) -> Self:
+    fn user_data(var self, value: UInt64) -> Self:
         self.sqe[].user_data = value
         return self^
 
     @always_inline("nodebug")
-    fn personality(owned self, value: UInt16) -> Self:
+    fn personality(var self, value: UInt16) -> Self:
         self.sqe[].personality = value
         return self^
 
     @always_inline("nodebug")
-    fn sqe_flags(owned self, flags: IoUringSqeFlags) -> Self:
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
         self.sqe[].flags |= flags
         return self^
 
     @always_inline("nodebug")
-    fn recv_flags(owned self, flags: RecvFlags) -> Self:
-        _size_eq[__type_of(flags), UInt32]()
+    fn recv_flags(var self, flags: RecvFlags) -> Self:
+        _size_eq[type_of(flags), UInt32]()
         self.sqe[].op_flags = flags.value
         return self^
 
     @always_inline("nodebug")
-    fn buf_group(owned self, value: UInt16) -> Self:
+    fn buf_group(var self, value: UInt16) -> Self:
         self.sqe[].buf_index_or_buf_group = value
         return self^
 
 
 @register_passable
-struct Send[type: SQE, origin: MutableOrigin](Operation):
+struct Send[type: SQE, origin: MutOrigin](Operation):
     """Send a message on a socket, equivalent to `send(2)`."""
 
-    alias SINCE = 5.6
+    comptime SINCE = 5.6
 
-    var sqe: Pointer[Sqe[type], origin]
+    var sqe: Pointer[Sqe[Self.type], Self.origin]
 
     @always_inline
     fn __init__[
         Fd: IoUringFileDescriptor,
     ](
         out self,
-        ref [origin]sqe: Sqe[type],
+        ref [Self.origin]sqe: Sqe[Self.type],
         fd: Fd,
-        unsafe_ptr: UnsafePointer[c_void],
+        unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin],
         len: UInt,
     ):
         _prep_rw(
             sqe,
             IoUringOp.SEND,
             fd,
-            Int(unsafe_ptr),
-            len,
+            UInt64(Int(unsafe_ptr)),
+            UInt32(len),
         )
-        self.sqe = Pointer.address_of(sqe)
+        self.sqe = Pointer(to=sqe)
 
     @always_inline("nodebug")
-    fn user_data(owned self, value: UInt64) -> Self:
+    fn user_data(var self, value: UInt64) -> Self:
         self.sqe[].user_data = value
         return self^
 
     @always_inline("nodebug")
-    fn personality(owned self, value: UInt16) -> Self:
+    fn personality(var self, value: UInt16) -> Self:
         self.sqe[].personality = value
         return self^
 
     @always_inline("nodebug")
-    fn sqe_flags(owned self, flags: IoUringSqeFlags) -> Self:
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
         self.sqe[].flags |= flags
         return self^
 
     @always_inline("nodebug")
-    fn send_flags(owned self, flags: SendFlags) -> Self:
-        _size_eq[__type_of(flags), UInt32]()
+    fn send_flags(var self, flags: SendFlags) -> Self:
+        _size_eq[type_of(flags), UInt32]()
         self.sqe[].op_flags = flags.value
         return self^
 
 
 @register_passable
-struct SendZc[type: SQE, origin: MutableOrigin](Operation):
+struct SendZc[type: SQE, origin: MutOrigin](Operation):
     """Send a zerocopy message on a socket, equivalent to `send(2)`."""
 
-    alias SINCE = 6.0
+    comptime SINCE = 6.0
 
-    var sqe: Pointer[Sqe[type], origin]
+    var sqe: Pointer[Sqe[Self.type], Self.origin]
 
     @always_inline
     fn __init__[
         Fd: IoUringFileDescriptor,
     ](
         out self,
-        ref [origin]sqe: Sqe[type],
+        ref [Self.origin]sqe: Sqe[Self.type],
         fd: Fd,
-        unsafe_ptr: UnsafePointer[c_void],
+        unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin],
         len: UInt,
     ):
         _prep_rw(
             sqe,
             IoUringOp.SEND_ZC,
             fd,
-            Int(unsafe_ptr),
-            len,
+            UInt64(Int(unsafe_ptr)),
+            UInt32(len),
         )
-        self.sqe = Pointer.address_of(sqe)
+        self.sqe = Pointer(to=sqe)
 
     @always_inline("nodebug")
-    fn user_data(owned self, value: UInt64) -> Self:
+    fn user_data(var self, value: UInt64) -> Self:
         self.sqe[].user_data = value
         return self^
 
     @always_inline("nodebug")
-    fn personality(owned self, value: UInt16) -> Self:
+    fn personality(var self, value: UInt16) -> Self:
         self.sqe[].personality = value
         return self^
 
     @always_inline("nodebug")
-    fn sqe_flags(owned self, flags: IoUringSqeFlags) -> Self:
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
         self.sqe[].flags |= flags
         return self^
 
     @always_inline("nodebug")
-    fn send_flags(owned self, flags: SendFlags) -> Self:
-        _size_eq[__type_of(flags), UInt32]()
+    fn send_flags(var self, flags: SendFlags) -> Self:
+        _size_eq[type_of(flags), UInt32]()
         self.sqe[].op_flags = flags.value
         return self^
 
     @always_inline("nodebug")
-    fn buf_index(owned self, value: UInt16) -> Self:
+    fn buf_index(var self, value: UInt16) -> Self:
         self.sqe[].buf_index_or_buf_group = value
         return self^
 
     @always_inline("nodebug")
-    fn send_flags(owned self, flags: IoUringSendFlags) -> Self:
-        _size_eq[__type_of(flags), UInt16]()
+    fn send_flags(var self, flags: IoUringSendFlags) -> Self:
+        _size_eq[type_of(flags), UInt16]()
         self.sqe[].ioprio = flags.value
         return self^
 
 
 @register_passable
-struct Write[type: SQE, origin: MutableOrigin](Operation):
+struct Write[type: SQE, origin: MutOrigin](Operation):
     """Write, equivalent to `pwrite(2)`."""
 
-    alias SINCE = 5.6
+    comptime SINCE = 5.6
 
-    var sqe: Pointer[Sqe[type], origin]
+    var sqe: Pointer[Sqe[Self.type], Self.origin]
 
     @always_inline
     fn __init__[
         Fd: IoUringFileDescriptor,
     ](
         out self,
-        ref [origin]sqe: Sqe[type],
+        ref [Self.origin]sqe: Sqe[Self.type],
         fd: Fd,
-        unsafe_ptr: UnsafePointer[c_void],
+        unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin],
         len: UInt,
     ):
         _prep_rw(
             sqe,
             IoUringOp.WRITE,
             fd,
-            Int(unsafe_ptr),
-            len,
+            UInt64(Int(unsafe_ptr)),
+            UInt32(len),
         )
-        self.sqe = Pointer.address_of(sqe)
+        self.sqe = Pointer(to=sqe)
 
     @always_inline("nodebug")
-    fn user_data(owned self, value: UInt64) -> Self:
+    fn user_data(var self, value: UInt64) -> Self:
         self.sqe[].user_data = value
         return self^
 
     @always_inline("nodebug")
-    fn personality(owned self, value: UInt16) -> Self:
+    fn personality(var self, value: UInt16) -> Self:
         self.sqe[].personality = value
         return self^
 
     @always_inline("nodebug")
-    fn sqe_flags(owned self, flags: IoUringSqeFlags) -> Self:
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
         self.sqe[].flags |= flags
         return self^
 
     @always_inline("nodebug")
-    fn ioprio(owned self, value: UInt16) -> Self:
+    fn ioprio(var self, value: UInt16) -> Self:
         self.sqe[].ioprio = value
         return self^
 
     @always_inline("nodebug")
-    fn offset(owned self, value: UInt64) -> Self:
+    fn offset(var self, value: UInt64) -> Self:
         self.sqe[].off_or_addr2_or_cmd_op = value
         return self^
 
     @always_inline("nodebug")
-    fn rw_flags(owned self, flags: ReadWriteFlags) -> Self:
-        _size_eq[__type_of(flags), UInt32]()
+    fn rw_flags(var self, flags: ReadWriteFlags) -> Self:
+        _size_eq[type_of(flags), UInt32]()
         self.sqe[].op_flags = flags.value
         return self^

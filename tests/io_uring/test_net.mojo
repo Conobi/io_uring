@@ -27,3 +27,7 @@ fn test_accept_timeout() raises:
         _ = ring.cq(wait_nr=1, arg=WaitArg(ts).as_enter_arg())
 
     _ = fd^
+
+
+fn main() raises:
+    test_accept_timeout()

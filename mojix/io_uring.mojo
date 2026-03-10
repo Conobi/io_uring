@@ -1,7 +1,7 @@
 from .ctypes import c_void
 from .fd import UnsafeFd, IoUringFileDescriptor, OwnedFd
 from .errno import unsafe_decode_result
-from .utils import _aligned_u64, _align_eq, _size_eq, StaticMutableOrigin
+from .utils import _aligned_u64, _align_eq, _size_eq, StaticMutOrigin
 from linux_raw.x86_64.io_uring import *
 from linux_raw.x86_64.general import (
     __NR_io_uring_setup,
@@ -40,11 +40,11 @@ fn io_uring_setup[
     """
     params.flags |= OwnedFd[is_registered].SETUP_FLAGS
 
-    res = syscall[__NR_io_uring_setup, Scalar[DType.index]](
-        sq_entries, UnsafePointer.address_of(params)
+    res = syscall[__NR_io_uring_setup, Scalar[DType.int64]](
+        sq_entries, UnsafePointer(to=params)
     )
     return OwnedFd[is_registered](
-        unsafe_fd=unsafe_decode_result[UnsafeFd.element_type](res)
+        unsafe_fd=unsafe_decode_result[DType.int32](res)
     )
 
 
@@ -68,7 +68,7 @@ fn io_uring_register[
     Raises:
         `Errno` if the syscall returned an error.
     """
-    res = syscall[__NR_io_uring_register, Scalar[DType.index]](
+    res = syscall[__NR_io_uring_register, Scalar[DType.int64]](
         fd.unsafe_fd(),
         arg.opcode.id | Fd.REGISTER_FLAGS.value,
         arg.arg_unsafe_ptr,
@@ -110,7 +110,7 @@ fn io_uring_enter[
     Raises:
         `Errno` if the syscall returned an error.
     """
-    res = syscall[__NR_io_uring_enter, Scalar[DType.index]](
+    res = syscall[__NR_io_uring_enter, Scalar[DType.int64]](
         fd.unsafe_fd(),
         to_submit,
         min_complete,
@@ -121,8 +121,7 @@ fn io_uring_enter[
     return unsafe_decode_result[DType.uint32](res)
 
 
-@value
-struct IoUringParams(Defaultable):
+struct IoUringParams(Defaultable, ImplicitlyCopyable, Movable):
     var sq_entries: UInt32
     var cq_entries: UInt32
     var flags: IoUringSetupFlags
@@ -148,7 +147,7 @@ struct IoUringParams(Defaultable):
         self.cq_off = io_cqring_offsets()
 
 
-alias SQE64 = SQE(
+comptime SQE64 = SQE(
     id=0,
     size=64,
     align=8,
@@ -156,7 +155,7 @@ alias SQE64 = SQE(
     setup_flags=IoUringSetupFlags(),
 )
 
-alias SQE128 = SQE(
+comptime SQE128 = SQE(
     id=1,
     size=128,
     align=8,
@@ -165,15 +164,30 @@ alias SQE128 = SQE(
 )
 
 
-@value
 @nonmaterializable(NoneType)
 @register_passable("trivial")
 struct SQE:
     var id: UInt8
-    var size: IntLiteral
-    var align: IntLiteral
-    var array_size: IntLiteral
+    var size: Int
+    var align: Int
+    var array_size: Int
     var setup_flags: IoUringSetupFlags
+
+    @always_inline
+    fn __init__(
+        out self,
+        *,
+        id: UInt8,
+        size: Int,
+        align: Int,
+        array_size: Int,
+        setup_flags: IoUringSetupFlags,
+    ):
+        self.id = id
+        self.size = size
+        self.align = align
+        self.array_size = array_size
+        self.setup_flags = setup_flags
 
     @always_inline
     fn __is__(self, rhs: Self) -> Bool:
@@ -194,7 +208,7 @@ struct SQE:
         )
 
 
-alias CQE16 = CQE(
+comptime CQE16 = CQE(
     id=0,
     size=16,
     align=8,
@@ -204,7 +218,7 @@ alias CQE16 = CQE(
 )
 
 
-alias CQE32 = CQE(
+comptime CQE32 = CQE(
     id=1,
     size=32,
     align=8,
@@ -214,24 +228,41 @@ alias CQE32 = CQE(
 )
 
 
-alias CQE_SIZE_DEFAULT = CQE16.size
-alias CQE_SIZE_MAX = CQE32.size
+comptime CQE_SIZE_DEFAULT = CQE16.size
+comptime CQE_SIZE_MAX = CQE32.size
 
 
-@value
 @nonmaterializable(NoneType)
 @register_passable("trivial")
 struct CQE:
     var id: UInt8
-    var size: IntLiteral
-    var align: IntLiteral
-    var array_size: IntLiteral
-    var rings_size: IntLiteral
+    var size: Int
+    var align: Int
+    var array_size: Int
+    var rings_size: Int
     """For the size of the rings, we perform calculations in the same way as the kernel.
     [Linux]: https://github.com/torvalds/linux/blob/v6.7/io_uring/io_uring.c#L2804.
     [Linux]: https://github.com/torvalds/linux/blob/v6.7/include/linux/io_uring_types.h#L83.
     """
     var setup_flags: IoUringSetupFlags
+
+    @always_inline
+    fn __init__(
+        out self,
+        *,
+        id: UInt8,
+        size: Int,
+        align: Int,
+        array_size: Int,
+        rings_size: Int,
+        setup_flags: IoUringSetupFlags,
+    ):
+        self.id = id
+        self.size = size
+        self.align = align
+        self.array_size = array_size
+        self.rings_size = rings_size
+        self.setup_flags = setup_flags
 
     @always_inline
     fn __is__(self, rhs: Self) -> Bool:
@@ -253,8 +284,7 @@ struct CQE:
         )
 
 
-@value
-struct addr3_struct(Defaultable):
+struct addr3_struct(Defaultable, ImplicitlyCopyable, Movable):
     var addr3: UInt64
     var __pad2: DTypeArray[DType.uint64, 1]
 
@@ -264,12 +294,11 @@ struct addr3_struct(Defaultable):
         self.__pad2 = DTypeArray[DType.uint64, 1]()
 
 
-@value
-struct Sqe[type: SQE]:
+struct Sqe[type: SQE](ImplicitlyCopyable, Movable):
     """[Linux]: https://github.com/torvalds/linux/blob/v6.7/include/uapi/linux/io_uring.h#L30.
     """
 
-    alias Array = DTypeArray[DType.uint8, type.array_size]
+    comptime Array = DTypeArray[DType.uint8, Self.type.array_size]
 
     var opcode: IoUringOp
     var flags: IoUringSqeFlags
@@ -290,48 +319,46 @@ struct Sqe[type: SQE]:
     fn cmd(
         mut self: Sqe[SQE128],
     ) -> ref [self.addr3_or_optval_or_cmd] DTypeArray[DType.uint8, 80]:
-        return UnsafePointer.address_of(self.addr3_or_optval_or_cmd).bitcast[
+        return UnsafePointer(to=self.addr3_or_optval_or_cmd).bitcast[
             DTypeArray[DType.uint8, 80]
         ]()[]
 
 
-@value
-struct Cqe[type: CQE]:
+struct Cqe[type: CQE](ImplicitlyCopyable, Movable):
     """[Linux]: https://github.com/torvalds/linux/blob/v6.7/include/uapi/linux/io_uring.h#L392.
     """
 
     var user_data: UInt64
     var res: Int32
     var flags: IoUringCqeFlags
-    var _big_cqe: DTypeArray[DType.uint64, type.array_size]
+    var _big_cqe: DTypeArray[DType.uint64, Self.type.array_size]
 
     @always_inline
     fn cmd(
         self: Cqe[CQE32],
-    ) -> ref [self._big_cqe] __type_of(self._big_cqe):
+    ) -> ref [self._big_cqe] type_of(self._big_cqe):
         return self._big_cqe
 
 
-@value
 @register_passable("trivial")
 struct IoUringSetupFlags(Defaultable, Boolable):
-    alias IOPOLL = Self(IORING_SETUP_IOPOLL)
-    alias SQPOLL = Self(IORING_SETUP_SQPOLL)
-    alias SQ_AFF = Self(IORING_SETUP_SQ_AFF)
-    alias CQSIZE = Self(IORING_SETUP_CQSIZE)
-    alias CLAMP = Self(IORING_SETUP_CLAMP)
-    alias ATTACH_WQ = Self(IORING_SETUP_ATTACH_WQ)
-    alias R_DISABLED = Self(IORING_SETUP_R_DISABLED)
-    alias SUBMIT_ALL = Self(IORING_SETUP_SUBMIT_ALL)
-    alias COOP_TASKRUN = Self(IORING_SETUP_COOP_TASKRUN)
-    alias TASKRUN_FLAG = Self(IORING_SETUP_TASKRUN_FLAG)
-    alias SQE128 = Self(IORING_SETUP_SQE128)
-    alias CQE32 = Self(IORING_SETUP_CQE32)
-    alias SINGLE_ISSUER = Self(IORING_SETUP_SINGLE_ISSUER)
-    alias DEFER_TASKRUN = Self(IORING_SETUP_DEFER_TASKRUN)
-    alias NO_MMAP = Self(IORING_SETUP_NO_MMAP)
-    alias REGISTERED_FD_ONLY = Self(IORING_SETUP_REGISTERED_FD_ONLY)
-    alias NO_SQARRAY = Self(IORING_SETUP_NO_SQARRAY)
+    comptime IOPOLL = Self(IORING_SETUP_IOPOLL)
+    comptime SQPOLL = Self(IORING_SETUP_SQPOLL)
+    comptime SQ_AFF = Self(IORING_SETUP_SQ_AFF)
+    comptime CQSIZE = Self(IORING_SETUP_CQSIZE)
+    comptime CLAMP = Self(IORING_SETUP_CLAMP)
+    comptime ATTACH_WQ = Self(IORING_SETUP_ATTACH_WQ)
+    comptime R_DISABLED = Self(IORING_SETUP_R_DISABLED)
+    comptime SUBMIT_ALL = Self(IORING_SETUP_SUBMIT_ALL)
+    comptime COOP_TASKRUN = Self(IORING_SETUP_COOP_TASKRUN)
+    comptime TASKRUN_FLAG = Self(IORING_SETUP_TASKRUN_FLAG)
+    comptime SQE128 = Self(IORING_SETUP_SQE128)
+    comptime CQE32 = Self(IORING_SETUP_CQE32)
+    comptime SINGLE_ISSUER = Self(IORING_SETUP_SINGLE_ISSUER)
+    comptime DEFER_TASKRUN = Self(IORING_SETUP_DEFER_TASKRUN)
+    comptime NO_MMAP = Self(IORING_SETUP_NO_MMAP)
+    comptime REGISTERED_FD_ONLY = Self(IORING_SETUP_REGISTERED_FD_ONLY)
+    comptime NO_SQARRAY = Self(IORING_SETUP_NO_SQARRAY)
 
     var value: UInt32
 
@@ -411,23 +438,22 @@ struct IoUringSetupFlags(Defaultable, Boolable):
         return self.value != 0
 
 
-@value
 @register_passable("trivial")
 struct IoUringFeatureFlags(Defaultable, Boolable):
-    alias SINGLE_MMAP = Self(IORING_FEAT_SINGLE_MMAP)
-    alias NODROP = Self(IORING_FEAT_NODROP)
-    alias SUBMIT_STABLE = Self(IORING_FEAT_SUBMIT_STABLE)
-    alias RW_CUR_POS = Self(IORING_FEAT_RW_CUR_POS)
-    alias CUR_PERSONALITY = Self(IORING_FEAT_CUR_PERSONALITY)
-    alias FAST_POLL = Self(IORING_FEAT_FAST_POLL)
-    alias POLL_32BITS = Self(IORING_FEAT_POLL_32BITS)
-    alias SQPOLL_NONFIXED = Self(IORING_FEAT_SQPOLL_NONFIXED)
-    alias EXT_ARG = Self(IORING_FEAT_EXT_ARG)
-    alias NATIVE_WORKERS = Self(IORING_FEAT_NATIVE_WORKERS)
-    alias RSRC_TAGS = Self(IORING_FEAT_RSRC_TAGS)
-    alias CQE_SKIP = Self(IORING_FEAT_CQE_SKIP)
-    alias LINKED_FILE = Self(IORING_FEAT_LINKED_FILE)
-    alias REG_REG_RING = Self(IORING_FEAT_REG_REG_RING)
+    comptime SINGLE_MMAP = Self(IORING_FEAT_SINGLE_MMAP)
+    comptime NODROP = Self(IORING_FEAT_NODROP)
+    comptime SUBMIT_STABLE = Self(IORING_FEAT_SUBMIT_STABLE)
+    comptime RW_CUR_POS = Self(IORING_FEAT_RW_CUR_POS)
+    comptime CUR_PERSONALITY = Self(IORING_FEAT_CUR_PERSONALITY)
+    comptime FAST_POLL = Self(IORING_FEAT_FAST_POLL)
+    comptime POLL_32BITS = Self(IORING_FEAT_POLL_32BITS)
+    comptime SQPOLL_NONFIXED = Self(IORING_FEAT_SQPOLL_NONFIXED)
+    comptime EXT_ARG = Self(IORING_FEAT_EXT_ARG)
+    comptime NATIVE_WORKERS = Self(IORING_FEAT_NATIVE_WORKERS)
+    comptime RSRC_TAGS = Self(IORING_FEAT_RSRC_TAGS)
+    comptime CQE_SKIP = Self(IORING_FEAT_CQE_SKIP)
+    comptime LINKED_FILE = Self(IORING_FEAT_LINKED_FILE)
+    comptime REG_REG_RING = Self(IORING_FEAT_REG_REG_RING)
 
     var value: UInt32
 
@@ -462,39 +488,38 @@ struct IoUringFeatureFlags(Defaultable, Boolable):
         return self.value != 0
 
 
-@value
 @register_passable("trivial")
 struct IoUringRegisterOp:
-    alias REGISTER_BUFFERS = Self(unsafe_id=IORING_REGISTER_BUFFERS)
-    alias UNREGISTER_BUFFERS = Self(unsafe_id=IORING_UNREGISTER_BUFFERS)
-    alias REGISTER_FILES = Self(unsafe_id=IORING_REGISTER_FILES)
-    alias UNREGISTER_FILES = Self(unsafe_id=IORING_UNREGISTER_FILES)
-    alias REGISTER_EVENTFD = Self(unsafe_id=IORING_REGISTER_EVENTFD)
-    alias UNREGISTER_EVENTFD = Self(unsafe_id=IORING_UNREGISTER_EVENTFD)
-    alias REGISTER_FILES_UPDATE = Self(unsafe_id=IORING_REGISTER_FILES_UPDATE)
-    alias REGISTER_EVENTFD_ASYNC = Self(unsafe_id=IORING_REGISTER_EVENTFD_ASYNC)
-    alias REGISTER_PROBE = Self(unsafe_id=IORING_REGISTER_PROBE)
-    alias REGISTER_PERSONALITY = Self(unsafe_id=IORING_REGISTER_PERSONALITY)
-    alias UNREGISTER_PERSONALITY = Self(unsafe_id=IORING_UNREGISTER_PERSONALITY)
-    alias REGISTER_RESTRICTIONS = Self(unsafe_id=IORING_REGISTER_RESTRICTIONS)
-    alias REGISTER_ENABLE_RINGS = Self(unsafe_id=IORING_REGISTER_ENABLE_RINGS)
-    alias REGISTER_FILES2 = Self(unsafe_id=IORING_REGISTER_FILES2)
-    alias REGISTER_FILES_UPDATE2 = Self(unsafe_id=IORING_REGISTER_FILES_UPDATE2)
-    alias REGISTER_BUFFERS2 = Self(unsafe_id=IORING_REGISTER_BUFFERS2)
-    alias REGISTER_BUFFERS_UPDATE = Self(
+    comptime REGISTER_BUFFERS = Self(unsafe_id=IORING_REGISTER_BUFFERS)
+    comptime UNREGISTER_BUFFERS = Self(unsafe_id=IORING_UNREGISTER_BUFFERS)
+    comptime REGISTER_FILES = Self(unsafe_id=IORING_REGISTER_FILES)
+    comptime UNREGISTER_FILES = Self(unsafe_id=IORING_UNREGISTER_FILES)
+    comptime REGISTER_EVENTFD = Self(unsafe_id=IORING_REGISTER_EVENTFD)
+    comptime UNREGISTER_EVENTFD = Self(unsafe_id=IORING_UNREGISTER_EVENTFD)
+    comptime REGISTER_FILES_UPDATE = Self(unsafe_id=IORING_REGISTER_FILES_UPDATE)
+    comptime REGISTER_EVENTFD_ASYNC = Self(unsafe_id=IORING_REGISTER_EVENTFD_ASYNC)
+    comptime REGISTER_PROBE = Self(unsafe_id=IORING_REGISTER_PROBE)
+    comptime REGISTER_PERSONALITY = Self(unsafe_id=IORING_REGISTER_PERSONALITY)
+    comptime UNREGISTER_PERSONALITY = Self(unsafe_id=IORING_UNREGISTER_PERSONALITY)
+    comptime REGISTER_RESTRICTIONS = Self(unsafe_id=IORING_REGISTER_RESTRICTIONS)
+    comptime REGISTER_ENABLE_RINGS = Self(unsafe_id=IORING_REGISTER_ENABLE_RINGS)
+    comptime REGISTER_FILES2 = Self(unsafe_id=IORING_REGISTER_FILES2)
+    comptime REGISTER_FILES_UPDATE2 = Self(unsafe_id=IORING_REGISTER_FILES_UPDATE2)
+    comptime REGISTER_BUFFERS2 = Self(unsafe_id=IORING_REGISTER_BUFFERS2)
+    comptime REGISTER_BUFFERS_UPDATE = Self(
         unsafe_id=IORING_REGISTER_BUFFERS_UPDATE
     )
-    alias REGISTER_IOWQ_AFF = Self(unsafe_id=IORING_REGISTER_IOWQ_AFF)
-    alias UNREGISTER_IOWQ_AFF = Self(unsafe_id=IORING_UNREGISTER_IOWQ_AFF)
-    alias REGISTER_IOWQ_MAX_WORKERS = Self(
+    comptime REGISTER_IOWQ_AFF = Self(unsafe_id=IORING_REGISTER_IOWQ_AFF)
+    comptime UNREGISTER_IOWQ_AFF = Self(unsafe_id=IORING_UNREGISTER_IOWQ_AFF)
+    comptime REGISTER_IOWQ_MAX_WORKERS = Self(
         unsafe_id=IORING_REGISTER_IOWQ_MAX_WORKERS
     )
-    alias REGISTER_RING_FDS = Self(unsafe_id=IORING_REGISTER_RING_FDS)
-    alias UNREGISTER_RING_FDS = Self(unsafe_id=IORING_UNREGISTER_RING_FDS)
-    alias REGISTER_PBUF_RING = Self(unsafe_id=IORING_REGISTER_PBUF_RING)
-    alias UNREGISTER_PBUF_RING = Self(unsafe_id=IORING_UNREGISTER_PBUF_RING)
-    alias REGISTER_SYNC_CANCEL = Self(unsafe_id=IORING_REGISTER_SYNC_CANCEL)
-    alias REGISTER_FILE_ALLOC_RANGE = Self(
+    comptime REGISTER_RING_FDS = Self(unsafe_id=IORING_REGISTER_RING_FDS)
+    comptime UNREGISTER_RING_FDS = Self(unsafe_id=IORING_UNREGISTER_RING_FDS)
+    comptime REGISTER_PBUF_RING = Self(unsafe_id=IORING_REGISTER_PBUF_RING)
+    comptime UNREGISTER_PBUF_RING = Self(unsafe_id=IORING_UNREGISTER_PBUF_RING)
+    comptime REGISTER_SYNC_CANCEL = Self(unsafe_id=IORING_REGISTER_SYNC_CANCEL)
+    comptime REGISTER_FILE_ALLOC_RANGE = Self(
         unsafe_id=IORING_REGISTER_FILE_ALLOC_RANGE
     )
 
@@ -505,10 +530,9 @@ struct IoUringRegisterOp:
         self.id = unsafe_id
 
 
-@value
 @register_passable("trivial")
 struct IoUringRegisterFlags(Defaultable):
-    alias REGISTER_USE_REGISTERED_RING = Self(
+    comptime REGISTER_USE_REGISTERED_RING = Self(
         IORING_REGISTER_USE_REGISTERED_RING
     )
 
@@ -518,13 +542,17 @@ struct IoUringRegisterFlags(Defaultable):
     fn __init__(out self):
         self.value = 0
 
+    @always_inline("nodebug")
+    @implicit
+    fn __init__(out self, value: UInt32):
+        self.value = value
 
-@value
+
 @register_passable("trivial")
 struct IoUringSqFlags(Defaultable):
-    alias NEED_WAKEUP = UInt32(IORING_SQ_NEED_WAKEUP)
-    alias CQ_OVERFLOW = UInt32(IORING_SQ_CQ_OVERFLOW)
-    alias TASKRUN = UInt32(IORING_SQ_TASKRUN)
+    comptime NEED_WAKEUP = UInt32(IORING_SQ_NEED_WAKEUP)
+    comptime CQ_OVERFLOW = UInt32(IORING_SQ_CQ_OVERFLOW)
+    comptime TASKRUN = UInt32(IORING_SQ_TASKRUN)
 
     var value: UInt32
 
@@ -533,14 +561,13 @@ struct IoUringSqFlags(Defaultable):
         self.value = 0
 
 
-@value
 @register_passable("trivial")
 struct IoUringEnterFlags(Defaultable):
-    alias GETEVENTS = Self(IORING_ENTER_GETEVENTS)
-    alias SQ_WAKEUP = Self(IORING_ENTER_SQ_WAKEUP)
-    alias SQ_WAIT = Self(IORING_ENTER_SQ_WAIT)
-    alias EXT_ARG = Self(IORING_ENTER_EXT_ARG)
-    alias REGISTERED_RING = Self(IORING_ENTER_REGISTERED_RING)
+    comptime GETEVENTS = Self(IORING_ENTER_GETEVENTS)
+    comptime SQ_WAKEUP = Self(IORING_ENTER_SQ_WAKEUP)
+    comptime SQ_WAIT = Self(IORING_ENTER_SQ_WAIT)
+    comptime EXT_ARG = Self(IORING_ENTER_EXT_ARG)
+    comptime REGISTERED_RING = Self(IORING_ENTER_REGISTERED_RING)
 
     var value: UInt32
 
@@ -575,16 +602,15 @@ struct IoUringEnterFlags(Defaultable):
         self = self | rhs
 
 
-@value
 @register_passable("trivial")
 struct IoUringSqeFlags(Defaultable):
-    alias FIXED_FILE = Self(1 << IOSQE_FIXED_FILE_BIT)
-    alias IO_DRAIN = Self(1 << IOSQE_IO_DRAIN_BIT)
-    alias IO_LINK = Self(1 << IOSQE_IO_LINK_BIT)
-    alias IO_HARDLINK = Self(1 << IOSQE_IO_HARDLINK_BIT)
-    alias ASYNC = Self(1 << IOSQE_ASYNC_BIT)
-    alias BUFFER_SELECT = Self(1 << IOSQE_BUFFER_SELECT_BIT)
-    alias CQE_SKIP_SUCCESS = Self(1 << IOSQE_CQE_SKIP_SUCCESS_BIT)
+    comptime FIXED_FILE = Self(1 << IOSQE_FIXED_FILE_BIT)
+    comptime IO_DRAIN = Self(1 << IOSQE_IO_DRAIN_BIT)
+    comptime IO_LINK = Self(1 << IOSQE_IO_LINK_BIT)
+    comptime IO_HARDLINK = Self(1 << IOSQE_IO_HARDLINK_BIT)
+    comptime ASYNC = Self(1 << IOSQE_ASYNC_BIT)
+    comptime BUFFER_SELECT = Self(1 << IOSQE_BUFFER_SELECT_BIT)
+    comptime CQE_SKIP_SUCCESS = Self(1 << IOSQE_CQE_SKIP_SUCCESS_BIT)
 
     var value: UInt8
 
@@ -619,13 +645,12 @@ struct IoUringSqeFlags(Defaultable):
         self = self | rhs
 
 
-@value
 @register_passable("trivial")
 struct IoUringCqeFlags(Defaultable, Boolable):
-    alias BUFFER = Self(IORING_CQE_F_BUFFER)
-    alias MORE = Self(IORING_CQE_F_MORE)
-    alias SOCK_NONEMPTY = Self(IORING_CQE_F_SOCK_NONEMPTY)
-    alias NOTIF = Self(IORING_CQE_F_NOTIF)
+    comptime BUFFER = Self(IORING_CQE_F_BUFFER)
+    comptime MORE = Self(IORING_CQE_F_MORE)
+    comptime SOCK_NONEMPTY = Self(IORING_CQE_F_SOCK_NONEMPTY)
+    comptime NOTIF = Self(IORING_CQE_F_NOTIF)
 
     var value: UInt32
 
@@ -660,7 +685,7 @@ struct IoUringCqeFlags(Defaultable, Boolable):
         return self.value != 0
 
     @always_inline("nodebug")
-    fn __rshift__(self, rhs: IntLiteral) -> Self:
+    fn __rshift__(self, rhs: Int) -> Self:
         """Returns `self >> rhs`.
 
         Args:
@@ -672,58 +697,57 @@ struct IoUringCqeFlags(Defaultable, Boolable):
         return self.value >> rhs
 
 
-@value
 @register_passable("trivial")
 struct IoUringOp:
-    alias NOP = Self(unsafe_id=IORING_OP_NOP)
-    alias READV = Self(unsafe_id=IORING_OP_READV)
-    alias WRITEV = Self(unsafe_id=IORING_OP_WRITEV)
-    alias FSYNC = Self(unsafe_id=IORING_OP_FSYNC)
-    alias READ_FIXED = Self(unsafe_id=IORING_OP_READ_FIXED)
-    alias WRITE_FIXED = Self(unsafe_id=IORING_OP_WRITE_FIXED)
-    alias POLL_ADD = Self(unsafe_id=IORING_OP_POLL_ADD)
-    alias POLL_REMOVE = Self(unsafe_id=IORING_OP_POLL_REMOVE)
-    alias SYNC_FILE_RANGE = Self(unsafe_id=IORING_OP_SYNC_FILE_RANGE)
-    alias SENDMSG = Self(unsafe_id=IORING_OP_SENDMSG)
-    alias RECVMSG = Self(unsafe_id=IORING_OP_RECVMSG)
-    alias TIMEOUT = Self(unsafe_id=IORING_OP_TIMEOUT)
-    alias TIMEOUT_REMOVE = Self(unsafe_id=IORING_OP_TIMEOUT_REMOVE)
-    alias ACCEPT = Self(unsafe_id=IORING_OP_ACCEPT)
-    alias ASYNC_CANCEL = Self(unsafe_id=IORING_OP_ASYNC_CANCEL)
-    alias LINK_TIMEOUT = Self(unsafe_id=IORING_OP_LINK_TIMEOUT)
-    alias CONNECT = Self(unsafe_id=IORING_OP_CONNECT)
-    alias FALLOCATE = Self(unsafe_id=IORING_OP_FALLOCATE)
-    alias OPENAT = Self(unsafe_id=IORING_OP_OPENAT)
-    alias CLOSE = Self(unsafe_id=IORING_OP_CLOSE)
-    alias FILES_UPDATE = Self(unsafe_id=IORING_OP_FILES_UPDATE)
-    alias STATX = Self(unsafe_id=IORING_OP_STATX)
-    alias READ = Self(unsafe_id=IORING_OP_READ)
-    alias WRITE = Self(unsafe_id=IORING_OP_WRITE)
-    alias FADVISE = Self(unsafe_id=IORING_OP_FADVISE)
-    alias MADVISE = Self(unsafe_id=IORING_OP_MADVISE)
-    alias SEND = Self(unsafe_id=IORING_OP_SEND)
-    alias RECV = Self(unsafe_id=IORING_OP_RECV)
-    alias OPENAT2 = Self(unsafe_id=IORING_OP_OPENAT2)
-    alias EPOLL_CTL = Self(unsafe_id=IORING_OP_EPOLL_CTL)
-    alias SPLICE = Self(unsafe_id=IORING_OP_SPLICE)
-    alias PROVIDE_BUFFERS = Self(unsafe_id=IORING_OP_PROVIDE_BUFFERS)
-    alias REMOVE_BUFFERS = Self(unsafe_id=IORING_OP_REMOVE_BUFFERS)
-    alias TEE = Self(unsafe_id=IORING_OP_TEE)
-    alias SHUTDOWN = Self(unsafe_id=IORING_OP_SHUTDOWN)
-    alias RENAMEAT = Self(unsafe_id=IORING_OP_RENAMEAT)
-    alias UNLINKAT = Self(unsafe_id=IORING_OP_UNLINKAT)
-    alias MKDIRAT = Self(unsafe_id=IORING_OP_MKDIRAT)
-    alias SYMLINKAT = Self(unsafe_id=IORING_OP_SYMLINKAT)
-    alias LINKAT = Self(unsafe_id=IORING_OP_LINKAT)
-    alias MSG_RING = Self(unsafe_id=IORING_OP_MSG_RING)
-    alias FSETXATTR = Self(unsafe_id=IORING_OP_FSETXATTR)
-    alias SETXATTR = Self(unsafe_id=IORING_OP_SETXATTR)
-    alias FGETXATTR = Self(unsafe_id=IORING_OP_FGETXATTR)
-    alias GETXATTR = Self(unsafe_id=IORING_OP_GETXATTR)
-    alias SOCKET = Self(unsafe_id=IORING_OP_SOCKET)
-    alias URING_CMD = Self(unsafe_id=IORING_OP_URING_CMD)
-    alias SEND_ZC = Self(unsafe_id=IORING_OP_SEND_ZC)
-    alias SENDMSG_ZC = Self(unsafe_id=IORING_OP_SENDMSG_ZC)
+    comptime NOP = Self(unsafe_id=IORING_OP_NOP)
+    comptime READV = Self(unsafe_id=IORING_OP_READV)
+    comptime WRITEV = Self(unsafe_id=IORING_OP_WRITEV)
+    comptime FSYNC = Self(unsafe_id=IORING_OP_FSYNC)
+    comptime READ_FIXED = Self(unsafe_id=IORING_OP_READ_FIXED)
+    comptime WRITE_FIXED = Self(unsafe_id=IORING_OP_WRITE_FIXED)
+    comptime POLL_ADD = Self(unsafe_id=IORING_OP_POLL_ADD)
+    comptime POLL_REMOVE = Self(unsafe_id=IORING_OP_POLL_REMOVE)
+    comptime SYNC_FILE_RANGE = Self(unsafe_id=IORING_OP_SYNC_FILE_RANGE)
+    comptime SENDMSG = Self(unsafe_id=IORING_OP_SENDMSG)
+    comptime RECVMSG = Self(unsafe_id=IORING_OP_RECVMSG)
+    comptime TIMEOUT = Self(unsafe_id=IORING_OP_TIMEOUT)
+    comptime TIMEOUT_REMOVE = Self(unsafe_id=IORING_OP_TIMEOUT_REMOVE)
+    comptime ACCEPT = Self(unsafe_id=IORING_OP_ACCEPT)
+    comptime ASYNC_CANCEL = Self(unsafe_id=IORING_OP_ASYNC_CANCEL)
+    comptime LINK_TIMEOUT = Self(unsafe_id=IORING_OP_LINK_TIMEOUT)
+    comptime CONNECT = Self(unsafe_id=IORING_OP_CONNECT)
+    comptime FALLOCATE = Self(unsafe_id=IORING_OP_FALLOCATE)
+    comptime OPENAT = Self(unsafe_id=IORING_OP_OPENAT)
+    comptime CLOSE = Self(unsafe_id=IORING_OP_CLOSE)
+    comptime FILES_UPDATE = Self(unsafe_id=IORING_OP_FILES_UPDATE)
+    comptime STATX = Self(unsafe_id=IORING_OP_STATX)
+    comptime READ = Self(unsafe_id=IORING_OP_READ)
+    comptime WRITE = Self(unsafe_id=IORING_OP_WRITE)
+    comptime FADVISE = Self(unsafe_id=IORING_OP_FADVISE)
+    comptime MADVISE = Self(unsafe_id=IORING_OP_MADVISE)
+    comptime SEND = Self(unsafe_id=IORING_OP_SEND)
+    comptime RECV = Self(unsafe_id=IORING_OP_RECV)
+    comptime OPENAT2 = Self(unsafe_id=IORING_OP_OPENAT2)
+    comptime EPOLL_CTL = Self(unsafe_id=IORING_OP_EPOLL_CTL)
+    comptime SPLICE = Self(unsafe_id=IORING_OP_SPLICE)
+    comptime PROVIDE_BUFFERS = Self(unsafe_id=IORING_OP_PROVIDE_BUFFERS)
+    comptime REMOVE_BUFFERS = Self(unsafe_id=IORING_OP_REMOVE_BUFFERS)
+    comptime TEE = Self(unsafe_id=IORING_OP_TEE)
+    comptime SHUTDOWN = Self(unsafe_id=IORING_OP_SHUTDOWN)
+    comptime RENAMEAT = Self(unsafe_id=IORING_OP_RENAMEAT)
+    comptime UNLINKAT = Self(unsafe_id=IORING_OP_UNLINKAT)
+    comptime MKDIRAT = Self(unsafe_id=IORING_OP_MKDIRAT)
+    comptime SYMLINKAT = Self(unsafe_id=IORING_OP_SYMLINKAT)
+    comptime LINKAT = Self(unsafe_id=IORING_OP_LINKAT)
+    comptime MSG_RING = Self(unsafe_id=IORING_OP_MSG_RING)
+    comptime FSETXATTR = Self(unsafe_id=IORING_OP_FSETXATTR)
+    comptime SETXATTR = Self(unsafe_id=IORING_OP_SETXATTR)
+    comptime FGETXATTR = Self(unsafe_id=IORING_OP_FGETXATTR)
+    comptime GETXATTR = Self(unsafe_id=IORING_OP_GETXATTR)
+    comptime SOCKET = Self(unsafe_id=IORING_OP_SOCKET)
+    comptime URING_CMD = Self(unsafe_id=IORING_OP_URING_CMD)
+    comptime SEND_ZC = Self(unsafe_id=IORING_OP_SEND_ZC)
+    comptime SENDMSG_ZC = Self(unsafe_id=IORING_OP_SENDMSG_ZC)
 
     var id: UInt8
 
@@ -732,10 +756,9 @@ struct IoUringOp:
         self.id = unsafe_id
 
 
-@value
 @register_passable("trivial")
 struct IoUringFsyncFlags(Defaultable):
-    alias DATASYNC = Self(IORING_FSYNC_DATASYNC)
+    comptime DATASYNC = Self(IORING_FSYNC_DATASYNC)
 
     var value: UInt32
 
@@ -743,12 +766,16 @@ struct IoUringFsyncFlags(Defaultable):
     fn __init__(out self):
         self.value = 0
 
+    @always_inline("nodebug")
+    @implicit
+    fn __init__(out self, value: UInt32):
+        self.value = value
 
-@value
+
 @register_passable("trivial")
 struct IoUringMsgRingCmds:
-    alias DATA = Self(unsafe_id=IORING_MSG_DATA)
-    alias SEND_FD = Self(unsafe_id=IORING_MSG_SEND_FD)
+    comptime DATA = Self(unsafe_id=IORING_MSG_DATA)
+    comptime SEND_FD = Self(unsafe_id=IORING_MSG_SEND_FD)
 
     var id: UInt64
 
@@ -757,13 +784,12 @@ struct IoUringMsgRingCmds:
         self.id = unsafe_id
 
 
-@value
 @register_passable("trivial")
 struct IoUringPollFlags(Defaultable):
-    alias ADD_MULTI = Self(IORING_POLL_ADD_MULTI)
-    alias UPDATE_EVENTS = Self(IORING_POLL_UPDATE_EVENTS)
-    alias UPDATE_USER_DATA = Self(IORING_POLL_UPDATE_USER_DATA)
-    alias ADD_LEVEL = Self(IORING_POLL_ADD_LEVEL)
+    comptime ADD_MULTI = Self(IORING_POLL_ADD_MULTI)
+    comptime UPDATE_EVENTS = Self(IORING_POLL_UPDATE_EVENTS)
+    comptime UPDATE_USER_DATA = Self(IORING_POLL_UPDATE_USER_DATA)
+    comptime ADD_LEVEL = Self(IORING_POLL_ADD_LEVEL)
 
     var value: UInt32
 
@@ -771,13 +797,17 @@ struct IoUringPollFlags(Defaultable):
     fn __init__(out self):
         self.value = 0
 
+    @always_inline("nodebug")
+    @implicit
+    fn __init__(out self, value: UInt32):
+        self.value = value
 
-@value
+
 @register_passable("trivial")
 struct IoUringSendFlags(Defaultable):
-    alias POLL_FIRST = Self(IORING_RECVSEND_POLL_FIRST)
-    alias FIXED_BUF = Self(IORING_RECVSEND_FIXED_BUF)
-    alias ZC_REPORT_USAGE = Self(IORING_SEND_ZC_REPORT_USAGE)
+    comptime POLL_FIRST = Self(IORING_RECVSEND_POLL_FIRST)
+    comptime FIXED_BUF = Self(IORING_RECVSEND_FIXED_BUF)
+    comptime ZC_REPORT_USAGE = Self(IORING_SEND_ZC_REPORT_USAGE)
 
     var value: UInt16
 
@@ -785,13 +815,17 @@ struct IoUringSendFlags(Defaultable):
     fn __init__(out self):
         self.value = 0
 
+    @always_inline("nodebug")
+    @implicit
+    fn __init__(out self, value: UInt16):
+        self.value = value
 
-@value
+
 @register_passable("trivial")
 struct IoUringRecvFlags(Defaultable):
-    alias POLL_FIRST = Self(IORING_RECVSEND_POLL_FIRST)
-    alias MULTISHOT = Self(IORING_RECV_MULTISHOT)
-    alias FIXED_BUF = Self(IORING_RECVSEND_FIXED_BUF)
+    comptime POLL_FIRST = Self(IORING_RECVSEND_POLL_FIRST)
+    comptime MULTISHOT = Self(IORING_RECV_MULTISHOT)
+    comptime FIXED_BUF = Self(IORING_RECVSEND_FIXED_BUF)
 
     var value: UInt16
 
@@ -799,11 +833,15 @@ struct IoUringRecvFlags(Defaultable):
     fn __init__(out self):
         self.value = 0
 
+    @always_inline("nodebug")
+    @implicit
+    fn __init__(out self, value: UInt16):
+        self.value = value
 
-@value
+
 @register_passable("trivial")
 struct IoUringAcceptFlags(Defaultable):
-    alias MULTISHOT = Self(IORING_ACCEPT_MULTISHOT)
+    comptime MULTISHOT = Self(IORING_ACCEPT_MULTISHOT)
 
     var value: UInt16
 
@@ -811,9 +849,14 @@ struct IoUringAcceptFlags(Defaultable):
     fn __init__(out self):
         self.value = 0
 
+    @always_inline("nodebug")
+    @implicit
+    fn __init__(out self, value: UInt16):
+        self.value = value
+
 
 @register_passable("trivial")
-struct EnterArg[size: UInt, flags: IoUringEnterFlags, origin: ImmutableOrigin]:
+struct EnterArg[size: UInt, flags: IoUringEnterFlags, origin: ImmutOrigin]:
     """
     Parameters:
         size: The size of the enter argument.
@@ -821,20 +864,19 @@ struct EnterArg[size: UInt, flags: IoUringEnterFlags, origin: ImmutableOrigin]:
         lifetime: The lifetime of the enter argument.
     """
 
-    var arg_unsafe_ptr: UnsafePointer[c_void]
+    var arg_unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin]
 
     @always_inline("nodebug")
-    fn __init__(out self, *, arg_unsafe_ptr: UnsafePointer[c_void]):
+    fn __init__(out self, *, arg_unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin]):
         self.arg_unsafe_ptr = arg_unsafe_ptr
 
 
-alias NO_ENTER_ARG = EnterArg[0, IoUringEnterFlags(), StaticConstantOrigin](
-    arg_unsafe_ptr=UnsafePointer[c_void]()
+comptime NO_ENTER_ARG = EnterArg[0, IoUringEnterFlags(), StaticConstantOrigin](
+    arg_unsafe_ptr=UnsafePointer[c_void, StaticConstantOrigin](unsafe_from_address=0)
 )
 
 
-@value
-struct IoUringGetEventsArg(Defaultable):
+struct IoUringGetEventsArg(Defaultable, ImplicitlyCopyable, Movable):
     var sigmask: UInt64
     var sigmask_sz: UInt32
     var pad: UInt32
@@ -850,7 +892,7 @@ struct IoUringGetEventsArg(Defaultable):
 
 trait AsRegisterArg:
     fn as_register_arg[
-        origin: MutableOrigin
+        origin: MutOrigin
     ](ref [origin]self, *, unsafe_opcode: IoUringRegisterOp) -> RegisterArg[
         origin
     ]:
@@ -858,10 +900,10 @@ trait AsRegisterArg:
 
 
 @register_passable("trivial")
-struct RegisterArg[origin: MutableOrigin]:
+struct RegisterArg[origin: MutOrigin]:
     var opcode: IoUringRegisterOp
     """The operation code."""
-    var arg_unsafe_ptr: UnsafePointer[c_void]
+    var arg_unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin]
     """The pointer to resources for registration/deregistration."""
     var nr_args: UInt32
     """The number of resources for registration/deregistration."""
@@ -871,7 +913,7 @@ struct RegisterArg[origin: MutableOrigin]:
         out self,
         *,
         opcode: IoUringRegisterOp,
-        arg_unsafe_ptr: UnsafePointer[c_void],
+        arg_unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin],
         nr_args: UInt32,
     ):
         self.opcode = opcode
@@ -880,14 +922,13 @@ struct RegisterArg[origin: MutableOrigin]:
 
 
 struct NoRegisterArg:
-    alias ENABLE_RINGS = RegisterArg[StaticMutableOrigin](
+    comptime ENABLE_RINGS = RegisterArg[StaticMutOrigin](
         opcode=IoUringRegisterOp.REGISTER_ENABLE_RINGS,
-        arg_unsafe_ptr=UnsafePointer[c_void](),
+        arg_unsafe_ptr=UnsafePointer[c_void, StaticConstantOrigin](unsafe_from_address=0),
         nr_args=0,
     )
 
 
-@value
 @register_passable("trivial")
 struct IoUringRsrcUpdate(AsRegisterArg, Defaultable):
     var offset: UInt32
@@ -902,20 +943,21 @@ struct IoUringRsrcUpdate(AsRegisterArg, Defaultable):
 
     @always_inline
     fn as_register_arg[
-        origin: MutableOrigin
+        origin: MutOrigin
     ](ref [origin]self, *, unsafe_opcode: IoUringRegisterOp) -> RegisterArg[
         origin
     ]:
         _aligned_u64[Self]()
         return RegisterArg[origin](
             opcode=unsafe_opcode,
-            arg_unsafe_ptr=UnsafePointer.address_of(self).bitcast[c_void](),
+            arg_unsafe_ptr=UnsafePointer[c_void, StaticConstantOrigin](
+                unsafe_from_address=Int(UnsafePointer(to=self))
+            ),
             nr_args=1,
         )
 
 
-@value
-struct IoUringBufReg(AsRegisterArg, Defaultable):
+struct IoUringBufReg(AsRegisterArg, Defaultable, ImplicitlyCopyable, Movable):
     var ring_addr: UInt64
     var ring_entries: UInt32
     var bgid: UInt16
@@ -950,7 +992,7 @@ struct IoUringBufReg(AsRegisterArg, Defaultable):
 
     @always_inline
     fn as_register_arg[
-        origin: MutableOrigin
+        origin: MutOrigin
     ](ref [origin]self, *, unsafe_opcode: IoUringRegisterOp) -> RegisterArg[
         origin
     ]:
@@ -958,6 +1000,8 @@ struct IoUringBufReg(AsRegisterArg, Defaultable):
         _align_eq[Self, 8]()
         return RegisterArg[origin](
             opcode=unsafe_opcode,
-            arg_unsafe_ptr=UnsafePointer.address_of(self).bitcast[c_void](),
+            arg_unsafe_ptr=UnsafePointer[c_void, StaticConstantOrigin](
+                unsafe_from_address=Int(UnsafePointer(to=self))
+            ),
             nr_args=1,
         )

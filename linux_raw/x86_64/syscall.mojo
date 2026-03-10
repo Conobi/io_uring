@@ -1,42 +1,7 @@
 from sys._assembly import inlined_assembly
 from sys.intrinsics import _mlirtype_is_eq
 
-
-@always_inline("nodebug")
-fn _syscall_constraints[
-    nr_args: IntLiteral,
-    result_type: AnyTrivialRegType,
-    /,
-    *,
-    uses_memory: Bool = True,
-]() -> StringLiteral:
-    alias has_outputs = not _mlirtype_is_eq[result_type, NoneType]()
-    alias outputs = "={rax}," if has_outputs else ""
-    alias syscall_nr_reg = "0" if has_outputs else "{rax}"
-    alias arg_regs = [",{rdi}", ",{rsi}", ",{rdx}", ",{r10}", ",{r8}", ",{r9}"]
-
-    constrained[
-        nr_args <= len(arg_regs),
-        "the number of arguments must be less than or equal to the maximum",
-    ]()
-
-    @parameter
-    fn inputs() -> StringLiteral:
-        regs = syscall_nr_reg
-
-        @parameter
-        for i in range(nr_args):
-            regs = regs + arg_regs.get[i, StringLiteral]()
-        return regs
-
-    @parameter
-    fn clobbers() -> StringLiteral:
-        val = ",~{rcx},~{r11}"
-        if uses_memory:
-            val = val + ",~{memory}"
-        return val
-
-    return outputs + inputs() + clobbers()
+comptime AnyTrivialRegType = __mlir_type[`!kgen.type`]
 
 
 # ===----------------------------------------------------------------------===#
@@ -54,17 +19,15 @@ fn syscall[
     uses_memory: Bool = True,
 ]() -> result_type:
     """Generates assembly via inline for syscall with 0 args."""
-
+    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime out = "={rax},0" if has_out else "{rax}"
+    comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
         "syscall",
         result_type,
-        constraints = _syscall_constraints[
-            0, result_type, uses_memory=uses_memory
-        ](),
+        constraints = out + mem,
         has_side_effect=has_side_effect,
-    ](
-        nr,
-    )
+    ](nr)
 
 
 # ===----------------------------------------------------------------------===#
@@ -83,18 +46,15 @@ fn syscall[
     uses_memory: Bool = True,
 ](arg0: arg0_type) -> result_type:
     """Generates assembly via inline for syscall with 1 arg."""
-
+    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime out = "={rax},0" if has_out else "{rax}"
+    comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
         "syscall",
         result_type,
-        constraints = _syscall_constraints[
-            1, result_type, uses_memory=uses_memory
-        ](),
+        constraints = out + ",{rdi}" + mem,
         has_side_effect=has_side_effect,
-    ](
-        nr,
-        arg0,
-    )
+    ](nr, arg0)
 
 
 # ===----------------------------------------------------------------------===#
@@ -114,19 +74,15 @@ fn syscall[
     uses_memory: Bool = True,
 ](arg0: arg0_type, arg1: arg1_type) -> result_type:
     """Generates assembly via inline for syscall with 2 args."""
-
+    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime out = "={rax},0" if has_out else "{rax}"
+    comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
         "syscall",
         result_type,
-        constraints = _syscall_constraints[
-            2, result_type, uses_memory=uses_memory
-        ](),
+        constraints = out + ",{rdi},{rsi}" + mem,
         has_side_effect=has_side_effect,
-    ](
-        nr,
-        arg0,
-        arg1,
-    )
+    ](nr, arg0, arg1)
 
 
 # ===----------------------------------------------------------------------===#
@@ -147,20 +103,15 @@ fn syscall[
     uses_memory: Bool = True,
 ](arg0: arg0_type, arg1: arg1_type, arg2: arg2_type) -> result_type:
     """Generates assembly via inline for syscall with 3 args."""
-
+    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime out = "={rax},0" if has_out else "{rax}"
+    comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
         "syscall",
         result_type,
-        constraints = _syscall_constraints[
-            3, result_type, uses_memory=uses_memory
-        ](),
+        constraints = out + ",{rdi},{rsi},{rdx}" + mem,
         has_side_effect=has_side_effect,
-    ](
-        nr,
-        arg0,
-        arg1,
-        arg2,
-    )
+    ](nr, arg0, arg1, arg2)
 
 
 # ===----------------------------------------------------------------------===#
@@ -184,21 +135,15 @@ fn syscall[
     arg0: arg0_type, arg1: arg1_type, arg2: arg2_type, arg3: arg3_type
 ) -> result_type:
     """Generates assembly via inline for syscall with 4 args."""
-
+    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime out = "={rax},0" if has_out else "{rax}"
+    comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
         "syscall",
         result_type,
-        constraints = _syscall_constraints[
-            4, result_type, uses_memory=uses_memory
-        ](),
+        constraints = out + ",{rdi},{rsi},{rdx},{r10}" + mem,
         has_side_effect=has_side_effect,
-    ](
-        nr,
-        arg0,
-        arg1,
-        arg2,
-        arg3,
-    )
+    ](nr, arg0, arg1, arg2, arg3)
 
 
 # ===----------------------------------------------------------------------===#
@@ -227,22 +172,15 @@ fn syscall[
     arg4: arg4_type,
 ) -> result_type:
     """Generates assembly via inline for syscall with 5 args."""
-
+    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime out = "={rax},0" if has_out else "{rax}"
+    comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
         "syscall",
         result_type,
-        constraints = _syscall_constraints[
-            5, result_type, uses_memory=uses_memory
-        ](),
+        constraints = out + ",{rdi},{rsi},{rdx},{r10},{r8}" + mem,
         has_side_effect=has_side_effect,
-    ](
-        nr,
-        arg0,
-        arg1,
-        arg2,
-        arg3,
-        arg4,
-    )
+    ](nr, arg0, arg1, arg2, arg3, arg4)
 
 
 # ===----------------------------------------------------------------------===#
@@ -273,20 +211,12 @@ fn syscall[
     arg5: arg5_type,
 ) -> result_type:
     """Generates assembly via inline for syscall with 6 args."""
-
+    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime out = "={rax},0" if has_out else "{rax}"
+    comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
         "syscall",
         result_type,
-        constraints = _syscall_constraints[
-            6, result_type, uses_memory=uses_memory
-        ](),
+        constraints = out + ",{rdi},{rsi},{rdx},{r10},{r8},{r9}" + mem,
         has_side_effect=has_side_effect,
-    ](
-        nr,
-        arg0,
-        arg1,
-        arg2,
-        arg3,
-        arg4,
-        arg5,
-    )
+    ](nr, arg0, arg1, arg2, arg3, arg4, arg5)

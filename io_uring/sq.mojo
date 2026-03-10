@@ -17,13 +17,13 @@ from memory import UnsafePointer
 struct Sq[type: SQE, polling: PollingMode](Movable, Sized, Boolable):
     """Submission Queue."""
 
-    var _head: UnsafePointer[UInt32]
-    var _tail: UnsafePointer[UInt32]
-    var _flags: UnsafePointer[UInt32]
-    var dropped: UnsafePointer[UInt32]
+    var _head: UnsafePointer[UInt32, StaticConstantOrigin]
+    var _tail: UnsafePointer[UInt32, StaticConstantOrigin]
+    var _flags: UnsafePointer[UInt32, StaticConstantOrigin]
+    var dropped: UnsafePointer[UInt32, StaticConstantOrigin]
 
-    var array: UnsafePointer[UInt32]
-    var sqes: UnsafePointer[Sqe[type]]
+    var array: UnsafePointer[UInt32, StaticConstantOrigin]
+    var sqes: UnsafePointer[Sqe[Self.type], StaticConstantOrigin]
 
     var sqe_head: UInt32
     var sqe_tail: UInt32
@@ -43,11 +43,11 @@ struct Sq[type: SQE, polling: PollingMode](Movable, Sized, Boolable):
         sqes_mem: Region,
     ) raises:
         constrained[
-            type is SQE64 or type is SQE128,
+            Self.type is SQE64 or Self.type is SQE128,
             "SQE must be equal to SQE64 or SQE128",
         ]()
-        _size_eq[Sqe[type], type.size]()
-        _align_eq[Sqe[type], type.align]()
+        _size_eq[Sqe[Self.type]](Self.type.size)
+        _align_eq[Sqe[Self.type]](Self.type.align)
 
         self._head = sq_cq_mem.unsafe_ptr[UInt32](
             offset=params.sq_off.head, count=1
@@ -76,23 +76,23 @@ struct Sq[type: SQE, polling: PollingMode](Movable, Sized, Boolable):
             raise "invalid sq ring_mask value"
 
         if params.flags & IoUringSetupFlags.NO_SQARRAY:
-            self.array = UnsafePointer[UInt32]()
+            self.array = UnsafePointer[UInt32, StaticConstantOrigin](unsafe_from_address=0)
         else:
             self.array = sq_cq_mem.unsafe_ptr[UInt32](
                 offset=params.sq_off.array, count=self.ring_entries
             )
             # Directly map `sq` slots to `sqes`.
             for i in range(self.ring_entries):
-                self.array[i] = i
+                _atomic_store(self.array + i, UInt32(i))
 
-        self.sqes = sqes_mem.unsafe_ptr[Sqe[type]](
+        self.sqes = sqes_mem.unsafe_ptr[Sqe[Self.type]](
             offset=0, count=self.ring_entries
         )
         self.sqe_head = self._head[]
         self.sqe_tail = self._tail[]
 
     @always_inline
-    fn __moveinit__(out self, owned existing: Self):
+    fn __moveinit__(out self, deinit existing: Self):
         """Moves data of an existing Sq into a new one.
 
         Args:
@@ -143,7 +143,7 @@ struct Sq[type: SQE, polling: PollingMode](Movable, Sized, Boolable):
     @always_inline
     fn head[ordering: AtomicOrdering](self) -> UInt32:
         @parameter
-        if polling is SQPOLL:
+        if Self.polling is SQPOLL:
             return _atomic_load[ordering](self._head)
         else:
             return self._head[]
@@ -151,10 +151,10 @@ struct Sq[type: SQE, polling: PollingMode](Movable, Sized, Boolable):
     @always_inline
     fn sync_tail(mut self):
         @parameter
-        if polling is SQPOLL:
+        if Self.polling is SQPOLL:
             _atomic_store(self._tail, self.sqe_tail)
         else:
-            self._tail[] = self.sqe_tail
+            _atomic_store(self._tail, self.sqe_tail)
 
     @always_inline
     fn flush(mut self) -> UInt32:
@@ -178,10 +178,10 @@ struct Sq[type: SQE, polling: PollingMode](Movable, Sized, Boolable):
 
 
 @register_passable
-struct SqPtr[type: SQE, polling: PollingMode, sq_origin: MutableOrigin](
+struct SqPtr[type: SQE, polling: PollingMode, sq_origin: MutOrigin](
     Sized, Boolable
 ):
-    var sq: Pointer[Sq[type, polling], sq_origin]
+    var sq: Pointer[Sq[Self.type, Self.polling], Self.sq_origin]
 
     # ===------------------------------------------------------------------=== #
     # Life cycle methods
@@ -189,24 +189,25 @@ struct SqPtr[type: SQE, polling: PollingMode, sq_origin: MutableOrigin](
 
     @implicit
     @always_inline
-    fn __init__(out self, ref [sq_origin]sq: Sq[type, polling]):
-        self.sq = Pointer.address_of(sq)
+    fn __init__(out self, ref [Self.sq_origin]sq: Sq[Self.type, Self.polling]):
+        self.sq = Pointer(to=sq)
 
     # ===------------------------------------------------------------------=== #
     # Operator dunders
     # ===------------------------------------------------------------------=== #
 
     @always_inline
-    fn __iter__(owned self) -> Self:
+    fn __iter__(var self) -> Self:
         return self^
 
     @always_inline
     fn __next__[
-        origin: MutableOrigin
-    ](ref [origin]self) -> ref [origin] Sqe[type]:
-        ptr = self.sq[].sqes.offset(self.sq[].sqe_tail & self.sq[].ring_mask)
+        origin: MutOrigin
+    ](ref [origin]self) -> ref [origin] Sqe[Self.type]:
+        ptr = self.sq[].sqes + (self.sq[].sqe_tail & self.sq[].ring_mask)
         self.sq[].sqe_tail += 1
-        return _nop_data(ptr[])
+        mut_ptr = rebind[UnsafePointer[Sqe[Self.type], origin]](ptr)
+        return _nop_data(mut_ptr[])
 
     @always_inline
     fn __has_next__(self) -> Bool:

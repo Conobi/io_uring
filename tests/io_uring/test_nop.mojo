@@ -5,7 +5,7 @@ from io_uring.op import Nop
 from testing import assert_equal, assert_raises
 
 
-@value
+@fieldwise_init
 @register_passable("trivial")
 struct OpQueue:
     var size: UInt
@@ -57,3 +57,8 @@ fn test_nop_skip_cqe() raises:
     # configured to perform any operation.
     with assert_raises(contains=String(Errno.ETIME)):
         _ = ring.cq(wait_nr=1, arg=WaitArg(ts).as_enter_arg())
+
+
+fn main() raises:
+    test_nop()
+    test_nop_skip_cqe()

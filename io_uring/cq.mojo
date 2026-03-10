@@ -8,11 +8,11 @@ from memory import UnsafePointer
 struct Cq[type: CQE](Movable, Sized, Boolable):
     """Completion Queue."""
 
-    var _head: UnsafePointer[UInt32]
-    var _tail: UnsafePointer[UInt32]
-    var flags: UnsafePointer[UInt32]
-    var overflow: UnsafePointer[UInt32]
-    var cqes: UnsafePointer[Cqe[type]]
+    var _head: UnsafePointer[UInt32, StaticConstantOrigin]
+    var _tail: UnsafePointer[UInt32, StaticConstantOrigin]
+    var flags: UnsafePointer[UInt32, StaticConstantOrigin]
+    var overflow: UnsafePointer[UInt32, StaticConstantOrigin]
+    var cqes: UnsafePointer[Cqe[Self.type], StaticConstantOrigin]
 
     var cqe_head: UInt32
     var cqe_tail: UInt32
@@ -26,11 +26,11 @@ struct Cq[type: CQE](Movable, Sized, Boolable):
 
     fn __init__(out self, params: IoUringParams, *, sq_cq_mem: Region) raises:
         constrained[
-            type is CQE16 or type is CQE32,
+            Self.type is CQE16 or Self.type is CQE32,
             "CQE must be equal to CQE16 or CQE32",
         ]()
-        _size_eq[Cqe[type], type.size]()
-        _align_eq[Cqe[type], type.align]()
+        _size_eq[Cqe[Self.type]](Self.type.size)
+        _align_eq[Cqe[Self.type]](Self.type.align)
 
         self._head = sq_cq_mem.unsafe_ptr[UInt32](
             offset=params.cq_off.head, count=1
@@ -58,14 +58,14 @@ struct Cq[type: CQE](Movable, Sized, Boolable):
         if self.ring_mask != self.ring_entries - 1:
             raise "invalid cq ring_mask value"
 
-        self.cqes = sq_cq_mem.unsafe_ptr[Cqe[type]](
+        self.cqes = sq_cq_mem.unsafe_ptr[Cqe[Self.type]](
             offset=params.cq_off.cqes, count=self.ring_entries
         )
         self.cqe_head = self._head[]
         self.cqe_tail = self._tail[]
 
     @always_inline
-    fn __moveinit__(out self, owned existing: Self):
+    fn __moveinit__(out self, deinit existing: Self):
         """Moves data of an existing Cq into a new one.
 
         Args:
@@ -121,8 +121,8 @@ struct Cq[type: CQE](Movable, Sized, Boolable):
 
 
 @register_passable
-struct CqPtr[type: CQE, cq_origin: MutableOrigin](Sized, Boolable):
-    var cq: Pointer[Cq[type], cq_origin]
+struct CqPtr[type: CQE, cq_origin: MutOrigin](Sized, Boolable):
+    var cq: Pointer[Cq[Self.type], Self.cq_origin]
 
     # ===------------------------------------------------------------------=== #
     # Life cycle methods
@@ -130,11 +130,11 @@ struct CqPtr[type: CQE, cq_origin: MutableOrigin](Sized, Boolable):
 
     @implicit
     @always_inline
-    fn __init__(out self, ref [cq_origin]cq: Cq[type]):
-        self.cq = Pointer.address_of(cq)
+    fn __init__(out self, ref [Self.cq_origin]cq: Cq[Self.type]):
+        self.cq = Pointer(to=cq)
 
     @always_inline
-    fn __del__(owned self):
+    fn __del__(deinit self):
         self.cq[].sync_head()
 
     # ===------------------------------------------------------------------=== #
@@ -142,18 +142,19 @@ struct CqPtr[type: CQE, cq_origin: MutableOrigin](Sized, Boolable):
     # ===------------------------------------------------------------------=== #
 
     @always_inline
-    fn __iter__(owned self) -> Self:
+    fn __iter__(var self) -> Self:
         return self^
 
     @always_inline
     fn __next__[
-        origin: MutableOrigin
-    ](ref [origin]self) -> ref [ImmutableOrigin.cast_from[origin].result] Cqe[
-        type
+        origin: MutOrigin
+    ](ref [origin]self) -> ref [origin] Cqe[
+        Self.type
     ]:
-        ptr = self.cq[].cqes.offset(self.cq[].cqe_head & self.cq[].ring_mask)
+        ptr = self.cq[].cqes + (self.cq[].cqe_head & self.cq[].ring_mask)
         self.cq[].cqe_head += 1
-        return ptr[]
+        mut_ptr = rebind[UnsafePointer[Cqe[Self.type], origin]](ptr)
+        return mut_ptr[]
 
     @always_inline
     fn __has_next__(self) -> Bool:

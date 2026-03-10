@@ -22,3 +22,8 @@ fn test_buf_into_index() raises:
 
     assert_equal(buf_ring._tail, 128)
     ring.unsafe_delete_buf_ring(buf_ring^)
+
+
+fn main() raises:
+    test_flags_to_index()
+    test_buf_into_index()

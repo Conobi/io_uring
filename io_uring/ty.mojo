@@ -2,15 +2,15 @@ from mojix import sigset_t
 from mojix.ctypes import c_void
 from mojix.io_uring import EnterArg, IoUringEnterFlags, IoUringGetEventsArg
 from mojix.timespec import Timespec
-from sys.info import sizeof
+from sys.info import size_of
 from memory import UnsafePointer
 
 
 struct WaitArg[
-    sigmask_origin: ImmutableOrigin,
-    timespec_origin: ImmutableOrigin,
+    sigmask_origin: ImmutOrigin,
+    timespec_origin: ImmutOrigin,
 ]:
-    alias enter_flags = IoUringEnterFlags.EXT_ARG
+    comptime enter_flags = IoUringEnterFlags.EXT_ARG
 
     var arg: IoUringGetEventsArg
 
@@ -24,38 +24,35 @@ struct WaitArg[
 
     @always_inline
     fn __init__[
-        origin: ImmutableOrigin
+        origin: ImmutOrigin
     ](
         out self: WaitArg[origin, StaticConstantOrigin],
         ref [origin]sigmask: sigset_t,
     ):
-        self.arg = IoUringGetEventsArg(
-            Int(UnsafePointer.address_of(sigmask)), sizeof[sigset_t](), 0, 0
-        )
+        self.arg = IoUringGetEventsArg()
+        self.arg.sigmask = Int(UnsafePointer(to=sigmask))
+        self.arg.sigmask_sz = size_of[sigset_t]()
 
     @always_inline
     fn __init__[
-        origin: ImmutableOrigin
+        origin: ImmutOrigin
     ](
         out self: WaitArg[StaticConstantOrigin, origin],
         ref [origin]timespec: Timespec,
     ):
-        self.arg = IoUringGetEventsArg(
-            0, 0, 0, Int(UnsafePointer.address_of(timespec))
-        )
+        self.arg = IoUringGetEventsArg()
+        self.arg.ts = Int(UnsafePointer(to=timespec))
 
     @always_inline
     fn __init__(
         out self,
-        ref [sigmask_origin]sigmask: sigset_t,
-        ref [timespec_origin]timespec: Timespec,
+        ref [Self.sigmask_origin]sigmask: sigset_t,
+        ref [Self.timespec_origin]timespec: Timespec,
     ):
-        self.arg = IoUringGetEventsArg(
-            Int(UnsafePointer.address_of(sigmask)),
-            sizeof[sigset_t](),
-            0,
-            Int(UnsafePointer.address_of(timespec)),
-        )
+        self.arg = IoUringGetEventsArg()
+        self.arg.sigmask = Int(UnsafePointer(to=sigmask))
+        self.arg.sigmask_sz = size_of[sigset_t]()
+        self.arg.ts = Int(UnsafePointer(to=timespec))
 
     # ===-------------------------------------------------------------------===#
     # Methods
@@ -65,10 +62,12 @@ struct WaitArg[
     fn as_enter_arg(
         self,
     ) -> EnterArg[
-        sizeof[IoUringGetEventsArg](),
+        size_of[IoUringGetEventsArg](),
         Self.enter_flags,
-        __origin_of(self),
+        origin_of(self),
     ]:
         return EnterArg[
-            sizeof[IoUringGetEventsArg](), Self.enter_flags, __origin_of(self)
-        ](arg_unsafe_ptr=UnsafePointer.address_of(self.arg).bitcast[c_void]())
+            size_of[IoUringGetEventsArg](), Self.enter_flags, origin_of(self)
+        ](arg_unsafe_ptr=rebind[UnsafePointer[c_void, StaticConstantOrigin]](
+            UnsafePointer(to=self.arg).bitcast[c_void]()
+        ))

@@ -2,12 +2,11 @@ from .utils import _next_power_of_two
 from mojix.errno import Errno
 from mojix.io_uring import IoUringParams, IoUringSetupFlags
 
-alias SQ_ENTRIES_MAX = 32768
-alias CQ_ENTRIES_MAX = SQ_ENTRIES_MAX * 2
+comptime SQ_ENTRIES_MAX = 32768
+comptime CQ_ENTRIES_MAX = SQ_ENTRIES_MAX * 2
 
 
-@value
-struct Params(Defaultable):
+struct Params(Defaultable, ImplicitlyCopyable, Movable):
     var flags: IoUringSetupFlags
     var _cq_entries: UInt32
     var sq_thread_cpu: UInt32

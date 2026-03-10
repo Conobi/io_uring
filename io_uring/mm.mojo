@@ -21,12 +21,12 @@ from mojix.mm import (
     MapFlags,
     Advice,
 )
-from sys.info import alignof, sizeof
+from sys.info import align_of, size_of
 from memory import UnsafePointer
 
 
 struct Region(Movable):
-    var ptr: UnsafePointer[c_void]
+    var ptr: UnsafePointer[c_void, StaticConstantOrigin]
     var len: UInt
 
     # ===------------------------------------------------------------------=== #
@@ -38,14 +38,14 @@ struct Region(Movable):
         Fd: FileDescriptor
     ](out self, *, fd: Fd, offset: UInt64, len: UInt) raises:
         self.ptr = mmap(
-            unsafe_ptr=UnsafePointer[c_void](),
+            unsafe_ptr=UnsafePointer[c_void, StaticConstantOrigin](unsafe_from_address=0),
             len=len,
             prot=ProtFlags.READ | ProtFlags.WRITE,
             flags=MapFlags.SHARED | MapFlags.POPULATE,
             fd=fd,
             offset=offset,
         )
-        debug_assert(self.ptr, "null pointer")
+        debug_assert(Int(self.ptr) != 0, "null pointer")
         self.len = len
 
     @always_inline
@@ -53,25 +53,25 @@ struct Region(Movable):
         is_shared: Bool = True
     ](out self, *, len: UInt, flags: MapFlags) raises:
         self.ptr = mmap_anonymous(
-            unsafe_ptr=UnsafePointer[c_void](),
+            unsafe_ptr=UnsafePointer[c_void, StaticConstantOrigin](unsafe_from_address=0),
             len=len,
             prot=ProtFlags.READ | ProtFlags.WRITE,
             flags=MapFlags.SHARED if is_shared else MapFlags.PRIVATE
             | MapFlags.POPULATE
             | flags,
         )
-        debug_assert(self.ptr, "null pointer")
+        debug_assert(Int(self.ptr) != 0, "null pointer")
         self.len = len
 
     @always_inline
-    fn __del__(owned self):
+    fn __del__(deinit self):
         try:
             munmap(unsafe_ptr=self.ptr, len=self.len)
         except:
             pass
 
     @always_inline
-    fn __moveinit__(out self, owned existing: Self):
+    fn __moveinit__(out self, deinit existing: Self):
         """Moves data of an existing Region into a new one.
 
         Args:
@@ -100,20 +100,33 @@ struct Region(Movable):
     @always_inline
     fn unsafe_ptr[
         T: AnyType
-    ](self, *, offset: UInt32, count: UInt32) raises -> UnsafePointer[T]:
-        constrained[alignof[T]() > 0]()
-        constrained[sizeof[c_void]() == 1]()
+    ](self, *, offset: UInt32, count: UInt32) raises -> UnsafePointer[T, StaticConstantOrigin]:
+        constrained[align_of[T]() > 0]()
+        constrained[size_of[c_void]() == 1]()
 
-        if _checked_add(offset, count * sizeof[T]()) > self.len:
+        if _checked_add(offset, count * size_of[T]()) > UInt32(self.len):
             raise "offset is out of bounds"
-        ptr = self.ptr.offset(offset)
-        if Int(ptr) & (alignof[T]() - 1):
+        ptr = self.ptr + offset
+        if Int(ptr) & (align_of[T]() - 1):
             raise "region is not properly aligned"
         return ptr.bitcast[T]()
 
     @always_inline
-    fn unsafe_ptr(self) -> UnsafePointer[c_void]:
+    fn unsafe_ptr(self) -> UnsafePointer[c_void, StaticConstantOrigin]:
         return self.ptr
+
+    @always_inline
+    fn unsafe_mut_ptr[T: AnyType](mut self) -> UnsafePointer[T, origin_of(self)]:
+        """Returns a mutable pointer to the region memory.
+
+        The underlying memory from mmap is always writable; this method
+        provides a mutable pointer by rebinding the StaticConstantOrigin
+        pointer to the Region's own mutable origin.
+        """
+        p8 = rebind[UnsafePointer[UInt8, origin_of(self)]](
+            self.ptr.bitcast[UInt8]()
+        )
+        return p8.bitcast[T]()
 
     @always_inline
     fn addr(self) -> UInt64:
@@ -129,25 +142,25 @@ struct MemoryMapping[sqe: SQE, cqe: CQE](Movable):
     # ===------------------------------------------------------------------=== #
 
     @always_inline
-    fn __init__(out self, *, owned sqes_mem: Region, owned sq_cq_mem: Region):
+    fn __init__(out self, *, var sqes_mem: Region, var sq_cq_mem: Region):
         self.sqes_mem = sqes_mem^
         self.sq_cq_mem = sq_cq_mem^
 
     fn __init__(out self, sq_entries: UInt32, mut params: IoUringParams) raises:
         entries = Entries(sq_entries=sq_entries, params=params)
         # FIXME: Get the actual page size value at runtime.
-        alias page_size = 4096
-        sqes_size = entries.sq_entries * sqe.size
+        comptime page_size = 4096
+        sqes_size = entries.sq_entries * Self.sqe.size
         sq_array_size = (
             0 if params.flags
             & IoUringSetupFlags.NO_SQARRAY else entries.sq_entries
-            * sizeof[UInt32]()
+            * size_of[UInt32]()
         )
         sq_cq_size = (
-            cqe.rings_size + entries.cq_entries * cqe.size + sq_array_size
+            Self.cqe.rings_size + entries.cq_entries * Self.cqe.size + sq_array_size
         )
 
-        alias HUGE_PAGE_SIZE = 1 << 21
+        comptime HUGE_PAGE_SIZE = 1 << 21
         if sqes_size > HUGE_PAGE_SIZE or sq_cq_size > HUGE_PAGE_SIZE:
             raise String(Errno.ENOMEM)
 
@@ -159,7 +172,7 @@ struct MemoryMapping[sqe: SQE, cqe: CQE](Movable):
             flags |= MapFlags.HUGETLB | MapFlags.HUGE_2MB
 
         self.sqes_mem = Region(
-            len=sqes_size.cast[DType.index]().value, flags=flags
+            len=Int(sqes_size), flags=flags
         )
 
         flags = MapFlags()
@@ -170,14 +183,14 @@ struct MemoryMapping[sqe: SQE, cqe: CQE](Movable):
             flags |= MapFlags.HUGETLB | MapFlags.HUGE_2MB
 
         self.sq_cq_mem = Region(
-            len=sq_cq_size.cast[DType.index]().value, flags=flags
+            len=Int(sq_cq_size), flags=flags
         )
 
         params.cq_off.user_addr = self.sq_cq_mem.addr()
         params.sq_off.user_addr = self.sqes_mem.addr()
 
     @always_inline
-    fn __moveinit__(out self, owned existing: Self):
+    fn __moveinit__(out self, deinit existing: Self):
         """Moves data of an existing MemoryMapping into a new one.
 
         Args:

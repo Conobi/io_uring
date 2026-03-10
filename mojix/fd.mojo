@@ -11,11 +11,11 @@ from .io_uring import (
 )
 
 
-alias UnsafeFd = c_int
+comptime UnsafeFd = c_int
 """An unsafe file descriptor.
  It represents identifiers that can be passed to low-level OS APIs.
  """
-alias NoFd = -1
+comptime NoFd = -1
 """Can be used to pass an unsafe file descriptor argument to syscalls
 like `mmap`, where it indicates that the argument is omitted.
 """
@@ -49,7 +49,7 @@ trait FileDescriptor(
     UnsafeFileDescriptor,
     Movable
 ):
-    fn fd(self) -> Fd:
+    fn fd(self) -> Fd[ImmutAnyOrigin]:
         ...
 
 
@@ -58,26 +58,26 @@ trait IoUringFileDescriptor(
     UnsafeFileDescriptor,
     Movable
 ):
-    alias IS_REGISTERED: Bool
-    alias SETUP_FLAGS: IoUringSetupFlags
-    alias REGISTER_FLAGS: IoUringRegisterFlags
-    alias ENTER_FLAGS: IoUringEnterFlags
-    alias SQE_FLAGS: IoUringSqeFlags
+    comptime IS_REGISTERED: Bool
+    comptime SETUP_FLAGS: IoUringSetupFlags
+    comptime REGISTER_FLAGS: IoUringRegisterFlags
+    comptime ENTER_FLAGS: IoUringEnterFlags
+    comptime SQE_FLAGS: IoUringSqeFlags
 
-    fn io_uring_fd(self) -> IoUringFd[IS_REGISTERED]:
+    fn io_uring_fd(self) -> IoUringFd[Self.IS_REGISTERED]:
         ...
 
 
 @register_passable("trivial")
-struct Fd[origin: ImmutableOrigin = ImmutableAnyOrigin](
+struct Fd[origin: ImmutOrigin = ImmutAnyOrigin](
     FileDescriptor,
     IoUringFileDescriptor,
 ):
-    alias IS_REGISTERED = False
-    alias SETUP_FLAGS = IoUringSetupFlags()
-    alias REGISTER_FLAGS = IoUringRegisterFlags()
-    alias ENTER_FLAGS = IoUringEnterFlags()
-    alias SQE_FLAGS = IoUringSqeFlags()
+    comptime IS_REGISTERED = False
+    comptime SETUP_FLAGS = IoUringSetupFlags()
+    comptime REGISTER_FLAGS = IoUringRegisterFlags()
+    comptime ENTER_FLAGS = IoUringEnterFlags()
+    comptime SQE_FLAGS = IoUringSqeFlags()
 
     var _fd: UnsafeFd
 
@@ -108,7 +108,7 @@ struct Fd[origin: ImmutableOrigin = ImmutableAnyOrigin](
         return self._fd
 
     @always_inline("nodebug")
-    fn fd(self) -> Fd:
+    fn fd(self) -> Fd[ImmutAnyOrigin]:
         return Fd(unsafe_fd=self._fd)
 
     @always_inline("nodebug")
@@ -118,18 +118,18 @@ struct Fd[origin: ImmutableOrigin = ImmutableAnyOrigin](
 
 @register_passable("trivial")
 struct IoUringFd[is_registered: Bool](FileDescriptor, IoUringFileDescriptor):
-    alias IS_REGISTERED = is_registered
+    comptime IS_REGISTERED = Self.is_registered
 
-    alias SETUP_FLAGS = IoUringSetupFlags.REGISTERED_FD_ONLY | IoUringSetupFlags.NO_MMAP
-        if is_registered else IoUringSetupFlags()
+    comptime SETUP_FLAGS = IoUringSetupFlags.REGISTERED_FD_ONLY | IoUringSetupFlags.NO_MMAP
+        if Self.is_registered else IoUringSetupFlags()
 
-    alias REGISTER_FLAGS = IoUringRegisterFlags.REGISTER_USE_REGISTERED_RING
-        if is_registered else IoUringRegisterFlags()
+    comptime REGISTER_FLAGS = IoUringRegisterFlags.REGISTER_USE_REGISTERED_RING
+        if Self.is_registered else IoUringRegisterFlags()
 
-    alias ENTER_FLAGS = IoUringEnterFlags.REGISTERED_RING if is_registered
+    comptime ENTER_FLAGS = IoUringEnterFlags.REGISTERED_RING if Self.is_registered
         else IoUringEnterFlags()
 
-    alias SQE_FLAGS = IoUringSqeFlags.FIXED_FILE if is_registered
+    comptime SQE_FLAGS = IoUringSqeFlags.FIXED_FILE if Self.is_registered
         else IoUringSqeFlags()
 
     var _fd: UnsafeFd
@@ -161,12 +161,12 @@ struct IoUringFd[is_registered: Bool](FileDescriptor, IoUringFileDescriptor):
         return self._fd
 
     @always_inline("nodebug")
-    fn fd(self) -> Fd:
-        constrained[not is_registered]()
+    fn fd(self) -> Fd[ImmutAnyOrigin]:
+        constrained[not Self.is_registered]()
         return Fd(unsafe_fd=self._fd)
 
     @always_inline("nodebug")
-    fn io_uring_fd(self) -> IoUringFd[is_registered]:
+    fn io_uring_fd(self) -> IoUringFd[Self.is_registered]:
         return self
 
 
@@ -175,11 +175,11 @@ struct OwnedFd[is_registered: Bool = False](FileDescriptor, IoUringFileDescripto
     """An owned file descriptor that is automatically closed/unregistered
     in its destructor.
     """
-    alias IS_REGISTERED = is_registered
-    alias SETUP_FLAGS = IoUringFd[is_registered].SETUP_FLAGS
-    alias REGISTER_FLAGS = IoUringFd[is_registered].REGISTER_FLAGS
-    alias ENTER_FLAGS = IoUringFd[is_registered].ENTER_FLAGS
-    alias SQE_FLAGS = IoUringFd[is_registered].SQE_FLAGS
+    comptime IS_REGISTERED = Self.is_registered
+    comptime SETUP_FLAGS = IoUringFd[Self.is_registered].SETUP_FLAGS
+    comptime REGISTER_FLAGS = IoUringFd[Self.is_registered].REGISTER_FLAGS
+    comptime ENTER_FLAGS = IoUringFd[Self.is_registered].ENTER_FLAGS
+    comptime SQE_FLAGS = IoUringFd[Self.is_registered].SQE_FLAGS
 
     var _fd: UnsafeFd
     """The underlying file descriptor."""
@@ -205,11 +205,12 @@ struct OwnedFd[is_registered: Bool = False](FileDescriptor, IoUringFileDescripto
         self._fd = unsafe_fd
 
     @always_inline("nodebug")
-    fn __del__(owned self):
+    fn __del__(deinit self):
         """Closes/unregisters the file descriptor."""
         @parameter
-        if is_registered:
-            op = IoUringRsrcUpdate(UInt32(self._fd), 0, 0)
+        if Self.is_registered:
+            op = IoUringRsrcUpdate()
+            op.offset = UInt32(self._fd)
             arg = op.as_register_arg(unsafe_opcode=IoUringRegisterOp.UNREGISTER_RING_FDS)
             try:
                 res = io_uring_register(self, arg)
@@ -233,13 +234,13 @@ struct OwnedFd[is_registered: Bool = False](FileDescriptor, IoUringFileDescripto
         return self._fd
 
     @always_inline("nodebug")
-    fn fd(self) -> Fd:
-        constrained[not is_registered]()
+    fn fd(self) -> Fd[ImmutAnyOrigin]:
+        constrained[not Self.is_registered]()
         return Fd(unsafe_fd=self._fd)
 
     @always_inline("nodebug")
-    fn io_uring_fd(self) -> IoUringFd[is_registered]:
-        return IoUringFd[is_registered](unsafe_fd=self._fd)
+    fn io_uring_fd(self) -> IoUringFd[Self.is_registered]:
+        return IoUringFd[Self.is_registered](unsafe_fd=self._fd)
 
 
 @always_inline("nodebug")
