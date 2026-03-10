@@ -46,6 +46,8 @@ struct ReactionGame(CompletionHandler):
     fn on_complete(
         mut self, token: UInt64, result: Int32, flags: IoUringCqeFlags
     ):
+        if result < 0:
+            return
         var elapsed_ms = (clock_gettime_ns() - self.start_ns) // 1_000_000
         self.results.append(elapsed_ms)
 
@@ -85,12 +87,12 @@ fn main() raises:
         var delay_ns = (seed % Int64(3_000_000_000)) + Int64(2_000_000_000)
         nanosleep_ns(delay_ns)
 
-        print("GO!")
         loop._handler.start_ns = clock_gettime_ns()
+        print("GO!")
         loop.submit_read(Fd(unsafe_fd=STDIN_FD), buf_ptr, 64, UInt64(i))
         loop.poll(wait_nr=1)
 
-        var elapsed = loop._handler.results[i]
+        var elapsed = loop._handler.results[len(loop._handler.results) - 1]
         print("  ->", elapsed, "ms")
         print()
 
@@ -106,7 +108,7 @@ fn main() raises:
         if r > max_ms:
             max_ms = r
         sum_ms += r
-    var avg_ms = sum_ms // TOTAL_ROUNDS
+    var avg_ms = sum_ms // Int64(len(results))
 
     print("================================")
     print("           RESULTS              ")
