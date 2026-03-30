@@ -6,12 +6,12 @@ from .types import (
     Protocol,
     SocketAddr,
 )
-from mojix.ctypes import c_int
+from mojix.ctypes import c_int, c_uint, c_void
 from mojix.utils import _size_eq
 from mojix.fd import UnsafeFd, OwnedFd, FileDescriptor
 from mojix.errno import unsafe_decode_result, unsafe_decode_none
 from linux_raw.utils import is_x86_64, DTypeArray
-from linux_raw.x86_64.general import __NR_socket, __NR_bind, __NR_listen, __NR_socketpair
+from linux_raw.x86_64.general import __NR_socket, __NR_bind, __NR_listen, __NR_socketpair, __NR_setsockopt
 from linux_raw.x86_64.syscall import syscall
 
 
@@ -75,3 +75,21 @@ fn _socketpair(
     )
     unsafe_decode_none(res)
     return (OwnedFd[False](unsafe_fd=sv[UInt(0)]), OwnedFd[False](unsafe_fd=sv[UInt(1)]))
+
+
+@always_inline
+fn _setsockopt[Fd: FileDescriptor](
+    fd: Fd,
+    level: c_int,
+    optname: c_int,
+    optval: UnsafePointer[c_void, StaticConstantOrigin],
+    optlen: c_uint,
+) raises:
+    constrained[is_x86_64()]()
+
+    # uses_memory=False is intentionally omitted: the kernel reads from
+    # the optval pointer, so memory effects must not be suppressed.
+    res = syscall[__NR_setsockopt, Scalar[DType.int64]](
+        fd.fd(), level, optname, optval, optlen
+    )
+    unsafe_decode_none(res)

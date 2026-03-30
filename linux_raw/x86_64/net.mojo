@@ -108,6 +108,18 @@ comptime IPPROTO_RAW = 255
 comptime IPPROTO_MPTCP = 262
 comptime IPPROTO_MAX = 263
 
+comptime SOL_SOCKET = 1
+comptime SOL_IP = 0
+comptime SOL_IPV6 = 41
+comptime SOL_UDP = 17
+comptime SO_REUSEADDR = 2
+comptime SO_RCVBUF = 8
+comptime SO_SNDBUF = 7
+comptime IP_PKTINFO = 8
+comptime IPV6_RECVPKTINFO = 49
+comptime UDP_GRO = 104
+comptime UDP_SEGMENT = 103
+
 comptime __u8 = c_uchar
 comptime __u16 = c_ushort
 comptime __u32 = c_uint
@@ -120,8 +132,7 @@ comptime socklen_t = c_uint
 comptime __kernel_sa_family_t = c_ushort
 
 
-@register_passable("trivial")
-struct in_addr:
+struct in_addr(TrivialRegisterPassable):
     var s_addr: __be32
 
     @always_inline
@@ -129,8 +140,7 @@ struct in_addr:
         self.s_addr = s_addr
 
 
-@register_passable("trivial")
-struct sockaddr_in:
+struct sockaddr_in(TrivialRegisterPassable):
     var sin_family: __kernel_sa_family_t
     var sin_port: __be16
     var sin_addr: in_addr
@@ -144,14 +154,101 @@ struct sockaddr_in:
         self.__pad = DTypeArray[DType.uint8, 8]()
 
 
-@register_passable("trivial")
-struct in6_addr:
+struct in6_addr(TrivialRegisterPassable):
     var in6_u: DTypeArray[DType.uint8, 16]
 
+    @always_inline
+    fn __init__(out self):
+        self.in6_u = DTypeArray[DType.uint8, 16]()
 
-struct sockaddr_in6(ImplicitlyCopyable, Movable):
+
+struct sockaddr_in6(TrivialRegisterPassable):
     var sin6_family: c_ushort
     var sin6_port: __be16
     var sin6_flowinfo: __be32
     var sin6_addr: in6_addr
     var sin6_scope_id: __u32
+
+    @always_inline
+    fn __init__(out self):
+        self.sin6_family = 0
+        self.sin6_port = 0
+        self.sin6_flowinfo = 0
+        self.sin6_addr = in6_addr()
+        self.sin6_scope_id = 0
+
+
+struct iovec(TrivialRegisterPassable):
+    var iov_base: UInt64  # void* stored as UInt64 for TrivialRegisterPassable
+    var iov_len: UInt64   # size_t
+
+    @always_inline
+    fn __init__(out self):
+        self.iov_base = 0
+        self.iov_len = 0
+
+
+# msghdr is 56 bytes on x86_64
+# offsets: msg_name=0, msg_namelen=8, [pad=12], msg_iov=16, msg_iovlen=24,
+#          msg_control=32, msg_controllen=40, msg_flags=48, [pad=52]
+struct msghdr(TrivialRegisterPassable):
+    var msg_name: UInt64        # void* — sockaddr pointer
+    var msg_namelen: UInt32     # socklen_t
+    var _pad0: UInt32           # alignment padding (offsets 12-15)
+    var msg_iov: UInt64         # struct iovec* pointer
+    var msg_iovlen: UInt64      # size_t — number of iovecs
+    var msg_control: UInt64     # void* — cmsg buffer pointer
+    var msg_controllen: UInt64  # size_t — cmsg buffer length
+    var msg_flags: Int32        # int
+    var _pad1: UInt32           # alignment padding (offsets 52-55)
+
+    @always_inline
+    fn __init__(out self):
+        self.msg_name = 0
+        self.msg_namelen = 0
+        self._pad0 = 0
+        self.msg_iov = 0
+        self.msg_iovlen = 0
+        self.msg_control = 0
+        self.msg_controllen = 0
+        self.msg_flags = 0
+        self._pad1 = 0
+
+
+# cmsghdr is 16 bytes — cmsg_len is size_t (8 bytes on x86_64)
+struct cmsghdr(TrivialRegisterPassable):
+    var cmsg_len: UInt64   # size_t — total length including header and data
+    var cmsg_level: Int32  # int — originating protocol
+    var cmsg_type: Int32   # int — protocol-specific type
+
+    @always_inline
+    fn __init__(out self):
+        self.cmsg_len = 0
+        self.cmsg_level = 0
+        self.cmsg_type = 0
+
+
+# in_pktinfo is 12 bytes
+# offsets: ipi_ifindex=0, ipi_spec_dst=4, ipi_addr=8
+struct in_pktinfo(TrivialRegisterPassable):
+    var ipi_ifindex: Int32     # int — interface index
+    var ipi_spec_dst: in_addr  # local address (source address)
+    var ipi_addr: in_addr      # destination address (header destination)
+
+    @always_inline
+    fn __init__(out self):
+        self.ipi_ifindex = 0
+        self.ipi_spec_dst = in_addr(0)
+        self.ipi_addr = in_addr(0)
+
+
+# in6_pktinfo is 20 bytes
+# offsets: ipi6_addr=0, ipi6_ifindex=16
+struct in6_pktinfo(TrivialRegisterPassable):
+    var ipi6_addr: in6_addr    # local IPv6 address (16 bytes)
+    var ipi6_ifindex: UInt32   # unsigned int — interface index
+
+    @always_inline
+    fn __init__(out self):
+        self.ipi6_addr = in6_addr()
+        self.ipi6_ifindex = 0

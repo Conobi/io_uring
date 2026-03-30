@@ -8,6 +8,7 @@ comptime __NR_socket = 41
 comptime __NR_bind = 49
 comptime __NR_listen = 50
 comptime __NR_socketpair = 53
+comptime __NR_setsockopt = 54
 comptime __NR_io_uring_setup = 425
 comptime __NR_io_uring_enter = 426
 comptime __NR_io_uring_register = 427
@@ -118,8 +119,7 @@ comptime RWF_APPEND = 16
 
 
 @fieldwise_init
-@register_passable("trivial")
-struct __kernel_timespec:
+struct __kernel_timespec(TrivialRegisterPassable):
     var tv_sec: c_longlong
     var tv_nsec: c_longlong
 

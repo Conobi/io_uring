@@ -1,9 +1,8 @@
 from mojix.io_uring import IoUringSetupFlags
 
 
-@nonmaterializable(NoneType)
-@register_passable("trivial")
-struct PollingMode(Identifiable):
+@__nonmaterializable(NoneType)
+struct PollingMode(TrivialRegisterPassable, Identifiable):
     var id: UInt8
     var setup_flags: IoUringSetupFlags
 

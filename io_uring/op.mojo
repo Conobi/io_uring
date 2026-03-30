@@ -92,8 +92,7 @@ trait Operation(SqeAttrs, Movable):
     ...
 
 
-@register_passable
-struct Accept[type: SQE, origin: MutOrigin](Operation):
+struct Accept[type: SQE, origin: MutOrigin](RegisterPassable, Operation):
     """Accept a new connection on a socket, equivalent to `accept4(2)`."""
 
     comptime SINCE = 5.5
@@ -159,8 +158,7 @@ struct Accept[type: SQE, origin: MutOrigin](Operation):
         return self^
 
 
-@register_passable
-struct Connect[type: SQE, origin: MutOrigin](Operation):
+struct Connect[type: SQE, origin: MutOrigin](RegisterPassable, Operation):
     """Connect a socket, equivalent to `connect(2)`."""
 
     comptime SINCE = 5.5
@@ -196,8 +194,7 @@ struct Connect[type: SQE, origin: MutOrigin](Operation):
         return self^
 
 
-@register_passable
-struct Nop[type: SQE, origin: MutOrigin](Operation):
+struct Nop[type: SQE, origin: MutOrigin](RegisterPassable, Operation):
     """Do not perform any I/O.
     A no-op is more useful than may appear at first glance.
     For example, you could set `IOSQE_IO_DRAIN_BIT` using `sqe_flags()`,
@@ -237,8 +234,7 @@ struct Nop[type: SQE, origin: MutOrigin](Operation):
         return self^
 
 
-@register_passable
-struct Read[type: SQE, origin: MutOrigin](Operation):
+struct Read[type: SQE, origin: MutOrigin](RegisterPassable, Operation):
     """Read, equivalent to `pread(2)`."""
 
     comptime SINCE = 5.6
@@ -301,8 +297,7 @@ struct Read[type: SQE, origin: MutOrigin](Operation):
         return self^
 
 
-@register_passable
-struct Recv[type: SQE, origin: MutOrigin](Operation):
+struct Recv[type: SQE, origin: MutOrigin](RegisterPassable, Operation):
     """Receive a message from a socket, equivalent to `recv(2)`."""
 
     comptime SINCE = 5.6
@@ -355,8 +350,103 @@ struct Recv[type: SQE, origin: MutOrigin](Operation):
         return self^
 
 
-@register_passable
-struct Send[type: SQE, origin: MutOrigin](Operation):
+struct RecvMsg[type: SQE, origin: MutOrigin](RegisterPassable, Operation):
+    """Receive a message from a socket, equivalent to `recvmsg(2)`."""
+
+    comptime SINCE = 5.3
+
+    var sqe: Pointer[Sqe[Self.type], Self.origin]
+
+    @always_inline
+    fn __init__[
+        Fd: IoUringFileDescriptor,
+    ](
+        out self,
+        ref [Self.origin]sqe: Sqe[Self.type],
+        fd: Fd,
+        unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin],
+        len: UInt = 1,
+    ):
+        _prep_rw(
+            sqe,
+            IoUringOp.RECVMSG,
+            fd,
+            UInt64(Int(unsafe_ptr)),
+            UInt32(len),
+        )
+        self.sqe = Pointer(to=sqe)
+
+    @always_inline("nodebug")
+    fn user_data(var self, value: UInt64) -> Self:
+        self.sqe[].user_data = value
+        return self^
+
+    @always_inline("nodebug")
+    fn personality(var self, value: UInt16) -> Self:
+        self.sqe[].personality = value
+        return self^
+
+    @always_inline("nodebug")
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
+        self.sqe[].flags |= flags
+        return self^
+
+    @always_inline("nodebug")
+    fn recv_flags(var self, flags: RecvFlags) -> Self:
+        _size_eq[type_of(flags), UInt32]()
+        self.sqe[].op_flags = flags.value
+        return self^
+
+
+struct SendMsg[type: SQE, origin: MutOrigin](RegisterPassable, Operation):
+    """Send a message on a socket, equivalent to `sendmsg(2)`."""
+
+    comptime SINCE = 5.3
+
+    var sqe: Pointer[Sqe[Self.type], Self.origin]
+
+    @always_inline
+    fn __init__[
+        Fd: IoUringFileDescriptor,
+    ](
+        out self,
+        ref [Self.origin]sqe: Sqe[Self.type],
+        fd: Fd,
+        unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin],
+        len: UInt = 1,
+    ):
+        _prep_rw(
+            sqe,
+            IoUringOp.SENDMSG,
+            fd,
+            UInt64(Int(unsafe_ptr)),
+            UInt32(len),
+        )
+        self.sqe = Pointer(to=sqe)
+
+    @always_inline("nodebug")
+    fn user_data(var self, value: UInt64) -> Self:
+        self.sqe[].user_data = value
+        return self^
+
+    @always_inline("nodebug")
+    fn personality(var self, value: UInt16) -> Self:
+        self.sqe[].personality = value
+        return self^
+
+    @always_inline("nodebug")
+    fn sqe_flags(var self, flags: IoUringSqeFlags) -> Self:
+        self.sqe[].flags |= flags
+        return self^
+
+    @always_inline("nodebug")
+    fn send_flags(var self, flags: SendFlags) -> Self:
+        _size_eq[type_of(flags), UInt32]()
+        self.sqe[].op_flags = flags.value
+        return self^
+
+
+struct Send[type: SQE, origin: MutOrigin](RegisterPassable, Operation):
     """Send a message on a socket, equivalent to `send(2)`."""
 
     comptime SINCE = 5.6
@@ -404,8 +494,7 @@ struct Send[type: SQE, origin: MutOrigin](Operation):
         return self^
 
 
-@register_passable
-struct SendZc[type: SQE, origin: MutOrigin](Operation):
+struct SendZc[type: SQE, origin: MutOrigin](RegisterPassable, Operation):
     """Send a zerocopy message on a socket, equivalent to `send(2)`."""
 
     comptime SINCE = 6.0
@@ -464,8 +553,7 @@ struct SendZc[type: SQE, origin: MutOrigin](Operation):
         return self^
 
 
-@register_passable
-struct Write[type: SQE, origin: MutOrigin](Operation):
+struct Write[type: SQE, origin: MutOrigin](RegisterPassable, Operation):
     """Write, equivalent to `pwrite(2)`."""
 
     comptime SINCE = 5.6

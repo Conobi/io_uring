@@ -68,8 +68,8 @@ trait IoUringFileDescriptor(
         ...
 
 
-@register_passable("trivial")
 struct Fd[origin: ImmutOrigin = ImmutAnyOrigin](
+    TrivialRegisterPassable,
     FileDescriptor,
     IoUringFileDescriptor,
 ):
@@ -116,8 +116,7 @@ struct Fd[origin: ImmutOrigin = ImmutAnyOrigin](
         return IoUringFd[Self.IS_REGISTERED](unsafe_fd=self._fd)
 
 
-@register_passable("trivial")
-struct IoUringFd[is_registered: Bool](FileDescriptor, IoUringFileDescriptor):
+struct IoUringFd[is_registered: Bool](TrivialRegisterPassable, FileDescriptor, IoUringFileDescriptor):
     comptime IS_REGISTERED = Self.is_registered
 
     comptime SETUP_FLAGS = IoUringSetupFlags.REGISTERED_FD_ONLY | IoUringSetupFlags.NO_MMAP
@@ -170,8 +169,7 @@ struct IoUringFd[is_registered: Bool](FileDescriptor, IoUringFileDescriptor):
         return self
 
 
-@register_passable
-struct OwnedFd[is_registered: Bool = False](FileDescriptor, IoUringFileDescriptor):
+struct OwnedFd[is_registered: Bool = False](RegisterPassable, FileDescriptor, IoUringFileDescriptor):
     """An owned file descriptor that is automatically closed/unregistered
     in its destructor.
     """

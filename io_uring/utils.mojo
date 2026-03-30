@@ -3,14 +3,12 @@ from sys.info import bit_width_of
 from memory import UnsafePointer
 
 
-@register_passable("trivial")
-struct _AddOverflowResult:
+struct _AddOverflowResult(TrivialRegisterPassable):
     var value: UInt32
     var overflow: Bool
 
-@nonmaterializable(NoneType)
-@register_passable("trivial")
-struct AtomicOrdering:
+@__nonmaterializable(NoneType)
+struct AtomicOrdering(TrivialRegisterPassable):
     comptime ACQUIRE = Self(unsafe_id=0)
     comptime RELEASE = Self(unsafe_id=1)
     comptime RELAXED = Self(unsafe_id=2)

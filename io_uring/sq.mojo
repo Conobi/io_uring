@@ -92,22 +92,22 @@ struct Sq[type: SQE, polling: PollingMode](Movable, Sized, Boolable):
         self.sqe_tail = self._tail[]
 
     @always_inline
-    fn __moveinit__(out self, deinit existing: Self):
+    fn __moveinit__(out self, deinit take: Self):
         """Moves data of an existing Sq into a new one.
 
         Args:
-            existing: The existing Sq.
+            take: The existing Sq.
         """
-        self._head = existing._head
-        self._tail = existing._tail
-        self._flags = existing._flags
-        self.dropped = existing.dropped
-        self.array = existing.array
-        self.sqes = existing.sqes
-        self.sqe_head = existing.sqe_head
-        self.sqe_tail = existing.sqe_tail
-        self.ring_mask = existing.ring_mask
-        self.ring_entries = existing.ring_entries
+        self._head = take._head
+        self._tail = take._tail
+        self._flags = take._flags
+        self.dropped = take.dropped
+        self.array = take.array
+        self.sqes = take.sqes
+        self.sqe_head = take.sqe_head
+        self.sqe_tail = take.sqe_tail
+        self.ring_mask = take.ring_mask
+        self.ring_entries = take.ring_entries
 
     # ===-------------------------------------------------------------------===#
     # Trait implementations
@@ -177,9 +177,8 @@ struct Sq[type: SQE, polling: PollingMode](Movable, Sized, Boolable):
         return _atomic_load[AtomicOrdering.RELAXED](self._flags)
 
 
-@register_passable
 struct SqPtr[type: SQE, polling: PollingMode, sq_origin: MutOrigin](
-    Sized, Boolable
+    RegisterPassable, Sized, Boolable
 ):
     var sq: Pointer[Sq[Self.type, Self.polling], Self.sq_origin]
 

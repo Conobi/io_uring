@@ -164,9 +164,8 @@ comptime SQE128 = SQE(
 )
 
 
-@nonmaterializable(NoneType)
-@register_passable("trivial")
-struct SQE:
+@__nonmaterializable(NoneType)
+struct SQE(TrivialRegisterPassable):
     var id: UInt8
     var size: Int
     var align: Int
@@ -232,9 +231,8 @@ comptime CQE_SIZE_DEFAULT = CQE16.size
 comptime CQE_SIZE_MAX = CQE32.size
 
 
-@nonmaterializable(NoneType)
-@register_passable("trivial")
-struct CQE:
+@__nonmaterializable(NoneType)
+struct CQE(TrivialRegisterPassable):
     var id: UInt8
     var size: Int
     var align: Int
@@ -340,8 +338,7 @@ struct Cqe[type: CQE](ImplicitlyCopyable, Movable):
         return self._big_cqe
 
 
-@register_passable("trivial")
-struct IoUringSetupFlags(Defaultable, Boolable):
+struct IoUringSetupFlags(TrivialRegisterPassable, Defaultable, Boolable):
     comptime IOPOLL = Self(IORING_SETUP_IOPOLL)
     comptime SQPOLL = Self(IORING_SETUP_SQPOLL)
     comptime SQ_AFF = Self(IORING_SETUP_SQ_AFF)
@@ -438,8 +435,7 @@ struct IoUringSetupFlags(Defaultable, Boolable):
         return self.value != 0
 
 
-@register_passable("trivial")
-struct IoUringFeatureFlags(Defaultable, Boolable):
+struct IoUringFeatureFlags(TrivialRegisterPassable, Defaultable, Boolable):
     comptime SINGLE_MMAP = Self(IORING_FEAT_SINGLE_MMAP)
     comptime NODROP = Self(IORING_FEAT_NODROP)
     comptime SUBMIT_STABLE = Self(IORING_FEAT_SUBMIT_STABLE)
@@ -488,8 +484,7 @@ struct IoUringFeatureFlags(Defaultable, Boolable):
         return self.value != 0
 
 
-@register_passable("trivial")
-struct IoUringRegisterOp:
+struct IoUringRegisterOp(TrivialRegisterPassable):
     comptime REGISTER_BUFFERS = Self(unsafe_id=IORING_REGISTER_BUFFERS)
     comptime UNREGISTER_BUFFERS = Self(unsafe_id=IORING_UNREGISTER_BUFFERS)
     comptime REGISTER_FILES = Self(unsafe_id=IORING_REGISTER_FILES)
@@ -530,8 +525,7 @@ struct IoUringRegisterOp:
         self.id = unsafe_id
 
 
-@register_passable("trivial")
-struct IoUringRegisterFlags(Defaultable):
+struct IoUringRegisterFlags(TrivialRegisterPassable, Defaultable):
     comptime REGISTER_USE_REGISTERED_RING = Self(
         IORING_REGISTER_USE_REGISTERED_RING
     )
@@ -548,8 +542,7 @@ struct IoUringRegisterFlags(Defaultable):
         self.value = value
 
 
-@register_passable("trivial")
-struct IoUringSqFlags(Defaultable):
+struct IoUringSqFlags(TrivialRegisterPassable, Defaultable):
     comptime NEED_WAKEUP = UInt32(IORING_SQ_NEED_WAKEUP)
     comptime CQ_OVERFLOW = UInt32(IORING_SQ_CQ_OVERFLOW)
     comptime TASKRUN = UInt32(IORING_SQ_TASKRUN)
@@ -561,8 +554,7 @@ struct IoUringSqFlags(Defaultable):
         self.value = 0
 
 
-@register_passable("trivial")
-struct IoUringEnterFlags(Defaultable):
+struct IoUringEnterFlags(TrivialRegisterPassable, Defaultable):
     comptime GETEVENTS = Self(IORING_ENTER_GETEVENTS)
     comptime SQ_WAKEUP = Self(IORING_ENTER_SQ_WAKEUP)
     comptime SQ_WAIT = Self(IORING_ENTER_SQ_WAIT)
@@ -602,8 +594,7 @@ struct IoUringEnterFlags(Defaultable):
         self = self | rhs
 
 
-@register_passable("trivial")
-struct IoUringSqeFlags(Defaultable):
+struct IoUringSqeFlags(TrivialRegisterPassable, Defaultable):
     comptime FIXED_FILE = Self(1 << IOSQE_FIXED_FILE_BIT)
     comptime IO_DRAIN = Self(1 << IOSQE_IO_DRAIN_BIT)
     comptime IO_LINK = Self(1 << IOSQE_IO_LINK_BIT)
@@ -645,8 +636,7 @@ struct IoUringSqeFlags(Defaultable):
         self = self | rhs
 
 
-@register_passable("trivial")
-struct IoUringCqeFlags(Defaultable, Boolable):
+struct IoUringCqeFlags(TrivialRegisterPassable, Defaultable, Boolable):
     comptime BUFFER = Self(IORING_CQE_F_BUFFER)
     comptime MORE = Self(IORING_CQE_F_MORE)
     comptime SOCK_NONEMPTY = Self(IORING_CQE_F_SOCK_NONEMPTY)
@@ -697,8 +687,7 @@ struct IoUringCqeFlags(Defaultable, Boolable):
         return self.value >> rhs
 
 
-@register_passable("trivial")
-struct IoUringOp:
+struct IoUringOp(TrivialRegisterPassable):
     comptime NOP = Self(unsafe_id=IORING_OP_NOP)
     comptime READV = Self(unsafe_id=IORING_OP_READV)
     comptime WRITEV = Self(unsafe_id=IORING_OP_WRITEV)
@@ -756,8 +745,7 @@ struct IoUringOp:
         self.id = unsafe_id
 
 
-@register_passable("trivial")
-struct IoUringFsyncFlags(Defaultable):
+struct IoUringFsyncFlags(TrivialRegisterPassable, Defaultable):
     comptime DATASYNC = Self(IORING_FSYNC_DATASYNC)
 
     var value: UInt32
@@ -772,8 +760,7 @@ struct IoUringFsyncFlags(Defaultable):
         self.value = value
 
 
-@register_passable("trivial")
-struct IoUringMsgRingCmds:
+struct IoUringMsgRingCmds(TrivialRegisterPassable):
     comptime DATA = Self(unsafe_id=IORING_MSG_DATA)
     comptime SEND_FD = Self(unsafe_id=IORING_MSG_SEND_FD)
 
@@ -784,8 +771,7 @@ struct IoUringMsgRingCmds:
         self.id = unsafe_id
 
 
-@register_passable("trivial")
-struct IoUringPollFlags(Defaultable):
+struct IoUringPollFlags(TrivialRegisterPassable, Defaultable):
     comptime ADD_MULTI = Self(IORING_POLL_ADD_MULTI)
     comptime UPDATE_EVENTS = Self(IORING_POLL_UPDATE_EVENTS)
     comptime UPDATE_USER_DATA = Self(IORING_POLL_UPDATE_USER_DATA)
@@ -803,8 +789,7 @@ struct IoUringPollFlags(Defaultable):
         self.value = value
 
 
-@register_passable("trivial")
-struct IoUringSendFlags(Defaultable):
+struct IoUringSendFlags(TrivialRegisterPassable, Defaultable):
     comptime POLL_FIRST = Self(IORING_RECVSEND_POLL_FIRST)
     comptime FIXED_BUF = Self(IORING_RECVSEND_FIXED_BUF)
     comptime ZC_REPORT_USAGE = Self(IORING_SEND_ZC_REPORT_USAGE)
@@ -821,8 +806,7 @@ struct IoUringSendFlags(Defaultable):
         self.value = value
 
 
-@register_passable("trivial")
-struct IoUringRecvFlags(Defaultable):
+struct IoUringRecvFlags(TrivialRegisterPassable, Defaultable):
     comptime POLL_FIRST = Self(IORING_RECVSEND_POLL_FIRST)
     comptime MULTISHOT = Self(IORING_RECV_MULTISHOT)
     comptime FIXED_BUF = Self(IORING_RECVSEND_FIXED_BUF)
@@ -839,8 +823,7 @@ struct IoUringRecvFlags(Defaultable):
         self.value = value
 
 
-@register_passable("trivial")
-struct IoUringAcceptFlags(Defaultable):
+struct IoUringAcceptFlags(TrivialRegisterPassable, Defaultable):
     comptime MULTISHOT = Self(IORING_ACCEPT_MULTISHOT)
 
     var value: UInt16
@@ -855,8 +838,7 @@ struct IoUringAcceptFlags(Defaultable):
         self.value = value
 
 
-@register_passable("trivial")
-struct EnterArg[size: UInt, flags: IoUringEnterFlags, origin: ImmutOrigin]:
+struct EnterArg[size: UInt, flags: IoUringEnterFlags, origin: ImmutOrigin](TrivialRegisterPassable):
     """
     Parameters:
         size: The size of the enter argument.
@@ -899,8 +881,7 @@ trait AsRegisterArg:
         ...
 
 
-@register_passable("trivial")
-struct RegisterArg[origin: MutOrigin]:
+struct RegisterArg[origin: MutOrigin](TrivialRegisterPassable):
     var opcode: IoUringRegisterOp
     """The operation code."""
     var arg_unsafe_ptr: UnsafePointer[c_void, StaticConstantOrigin]
@@ -929,8 +910,7 @@ struct NoRegisterArg:
     )
 
 
-@register_passable("trivial")
-struct IoUringRsrcUpdate(AsRegisterArg, Defaultable):
+struct IoUringRsrcUpdate(TrivialRegisterPassable, AsRegisterArg, Defaultable):
     var offset: UInt32
     var resv: UInt32
     var data: UInt64

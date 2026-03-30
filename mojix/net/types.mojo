@@ -5,8 +5,10 @@ from linux_raw.x86_64.net import (
     __kernel_sa_family_t,
     __be32,
     sockaddr_in,
+    sockaddr_in6,
     socklen_t,
     in_addr,
+    in6_addr,
 )
 from linux_raw.x86_64.net import *
 from linux_raw.utils import DTypeArray
@@ -50,8 +52,7 @@ trait SocketAddrStorMut:
         ...
 
 
-@register_passable("trivial")
-struct SocketAddrStorV4(SocketAddr):
+struct SocketAddrStorV4(TrivialRegisterPassable, SocketAddr):
     comptime ADDR_LEN: socklen_t = size_of[sockaddr_in]()
 
     var addr: sockaddr_in
@@ -127,8 +128,7 @@ struct SocketAddrStorAnyMut[Addr: SocketAddr](SocketAddrMut):
         )
 
 
-@register_passable("trivial")
-struct IpAddrV4:
+struct IpAddrV4(TrivialRegisterPassable):
     comptime Octets = SIMD[DType.uint8, 4]
 
     var octets: Self.Octets
@@ -142,8 +142,7 @@ struct IpAddrV4:
         self.octets = Self.Octets(a, b, c, d)
 
 
-@register_passable("trivial")
-struct SocketAddrV4(SocketAddrStor, SocketAddrStorMut):
+struct SocketAddrV4(TrivialRegisterPassable, SocketAddrStor, SocketAddrStorMut):
     comptime AddrStorType: SocketAddr = SocketAddrStorV4
     comptime AddrStorMutType: SocketAddrMut = SocketAddrStorMutV4
     comptime Octets = IpAddrV4.Octets
@@ -184,11 +183,140 @@ struct SocketAddrV4(SocketAddrStor, SocketAddrStorMut):
         result = Self.AddrStorMutType()
 
 
+struct IpAddrV6(TrivialRegisterPassable):
+    comptime Segments = SIMD[DType.uint16, 8]
+
+    var segments: Self.Segments
+
+    # ===------------------------------------------------------------------=== #
+    # Life cycle methods
+    # ===------------------------------------------------------------------=== #
+
+    @always_inline
+    fn __init__(
+        out self,
+        a: UInt16,
+        b: UInt16,
+        c: UInt16,
+        d: UInt16,
+        e: UInt16,
+        f: UInt16,
+        g: UInt16,
+        h: UInt16,
+    ):
+        self.segments = Self.Segments(a, b, c, d, e, f, g, h)
+
+
+struct SocketAddrStorV6(TrivialRegisterPassable, SocketAddr):
+    comptime ADDR_LEN: socklen_t = size_of[sockaddr_in6]()
+
+    var addr: sockaddr_in6
+
+    # ===------------------------------------------------------------------=== #
+    # Life cycle methods
+    # ===------------------------------------------------------------------=== #
+
+    @always_inline
+    fn __init__(out self):
+        _size_eq[Self, 28]()
+        _align_eq[Self, 4]()
+        self.addr = sockaddr_in6()
+
+    @always_inline
+    fn __init__[
+        origin: ImmutOrigin
+    ](out self, ref [origin]addr: SocketAddrV6):
+        _size_eq[Self, 28]()
+        _align_eq[Self, 4]()
+
+        self.addr = sockaddr_in6()
+        self.addr.sin6_family = AddrFamily.INET6.id
+        self.addr.sin6_port = _to_be(addr.port)
+        self.addr.sin6_flowinfo = 0
+        # Convert 8×uint16 segments (host order) to 16 big-endian bytes.
+        # _to_be byte-swaps each uint16 to network (big-endian) order.
+        # We then copy the resulting 16 bytes into sin6_addr.in6_u via
+        # UnsafePointer: cast the DTypeArray storage to uint8 on both sides
+        # and copy 16 bytes.
+        var be_segs = _to_be(addr.segments())
+        var src = UnsafePointer(to=be_segs).bitcast[UInt8]()
+        var dst = UnsafePointer(to=self.addr.sin6_addr.in6_u.array).bitcast[UInt8]()
+        for i in range(16):
+            dst[i] = src[i]
+        self.addr.sin6_scope_id = addr.scope_id
+
+    # ===------------------------------------------------------------------=== #
+    # Trait implementations
+    # ===------------------------------------------------------------------=== #
+
+    @always_inline
+    fn addr_unsafe_ptr(ref self) -> UnsafePointer[c_void, StaticConstantOrigin]:
+        return UnsafePointer[c_void, StaticConstantOrigin](
+            unsafe_from_address=Int(UnsafePointer(to=self.addr))
+        )
+
+
+comptime SocketAddrStorMutV6 = SocketAddrStorAnyMut[SocketAddrStorV6]
+
+
+struct SocketAddrV6(TrivialRegisterPassable, SocketAddrStor, SocketAddrStorMut):
+    comptime AddrStorType: SocketAddr = SocketAddrStorV6
+    comptime AddrStorMutType: SocketAddrMut = SocketAddrStorMutV6
+    comptime Segments = IpAddrV6.Segments
+
+    var ip: IpAddrV6
+    var port: UInt16
+    var scope_id: UInt32
+
+    # ===------------------------------------------------------------------=== #
+    # Life cycle methods
+    # ===------------------------------------------------------------------=== #
+
+    @always_inline
+    fn __init__(
+        out self,
+        a: UInt16,
+        b: UInt16,
+        c: UInt16,
+        d: UInt16,
+        e: UInt16,
+        f: UInt16,
+        g: UInt16,
+        h: UInt16,
+        *,
+        port: UInt16,
+        scope_id: UInt32 = 0,
+    ):
+        self.ip = IpAddrV6(a, b, c, d, e, f, g, h)
+        self.port = port
+        self.scope_id = scope_id
+
+    # ===-------------------------------------------------------------------===#
+    # Methods
+    # ===-------------------------------------------------------------------===#
+
+    @always_inline
+    fn segments(ref self) -> ref [self.ip.segments] Self.Segments:
+        return self.ip.segments
+
+    # ===------------------------------------------------------------------=== #
+    # Trait implementations
+    # ===------------------------------------------------------------------=== #
+
+    @always_inline
+    fn addr_stor(ref self, out result: Self.AddrStorType):
+        result = Self.AddrStorType(self)
+
+    @staticmethod
+    @always_inline
+    fn addr_stor_mut(out result: Self.AddrStorMutType):
+        result = Self.AddrStorMutType()
+
+
 comptime RawSocketType = c_uint
 
 
-@register_passable("trivial")
-struct SocketType:
+struct SocketType(TrivialRegisterPassable):
     """`SOCK_*` constants for use with `socket`."""
 
     comptime STREAM = Self(unsafe_id=SOCK_STREAM)
@@ -204,8 +332,7 @@ struct SocketType:
         self.id = unsafe_id
 
 
-@register_passable("trivial")
-struct SocketFlags(Defaultable):
+struct SocketFlags(TrivialRegisterPassable, Defaultable):
     """`SOCK_*` constants for use with `socket`."""
 
     comptime NONBLOCK = Self(SOCK_NONBLOCK)
@@ -238,8 +365,7 @@ struct SocketFlags(Defaultable):
 comptime RawAddrFamily = __kernel_sa_family_t
 
 
-@register_passable("trivial")
-struct AddrFamily:
+struct AddrFamily(TrivialRegisterPassable):
     """`AF_*` constants for use with `socket`."""
 
     comptime UNSPEC = Self(unsafe_id=AF_UNSPEC)
@@ -255,8 +381,7 @@ struct AddrFamily:
         self.id = unsafe_id
 
 
-@register_passable("trivial")
-struct Protocol(Defaultable):
+struct Protocol(TrivialRegisterPassable, Defaultable):
     """`IPPROTO_*` and other constants for use with `socket`."""
 
     comptime IP = Self(unsafe_id=IPPROTO_IP)
@@ -303,8 +428,7 @@ struct Protocol(Defaultable):
         self.id = unsafe_id
 
 
-@register_passable("trivial")
-struct SendFlags(Defaultable):
+struct SendFlags(TrivialRegisterPassable, Defaultable):
     """`MSG_*` flags for use with `send`, `send_to`, and related functions."""
 
     comptime CONFIRM = Self(MSG_CONFIRM)
@@ -327,8 +451,7 @@ struct SendFlags(Defaultable):
         self.value = value
 
 
-@register_passable("trivial")
-struct RecvFlags(Defaultable):
+struct RecvFlags(TrivialRegisterPassable, Defaultable):
     """`MSG_*` flags for use with `recv`, `recvfrom`, and related functions."""
 
     comptime CMSG_CLOEXEC = Self(MSG_CMSG_CLOEXEC)

@@ -1,7 +1,5 @@
 from sys._assembly import inlined_assembly
-from sys.intrinsics import _mlirtype_is_eq
-
-comptime AnyTrivialRegType = __mlir_type[`!kgen.type`]
+from sys.intrinsics import _type_is_eq
 
 
 # ===----------------------------------------------------------------------===#
@@ -12,14 +10,14 @@ comptime AnyTrivialRegType = __mlir_type[`!kgen.type`]
 @always_inline("nodebug")
 fn syscall[
     nr: IntLiteral,
-    result_type: AnyTrivialRegType,
+    result_type: TrivialRegisterPassable,
     /,
     *,
     has_side_effect: Bool = True,
     uses_memory: Bool = True,
 ]() -> result_type:
     """Generates assembly via inline for syscall with 0 args."""
-    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime has_out = not _type_is_eq[result_type, NoneType]()
     comptime out = "={rax},0" if has_out else "{rax}"
     comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
@@ -37,16 +35,16 @@ fn syscall[
 
 @always_inline("nodebug")
 fn syscall[
-    arg0_type: AnyTrivialRegType, //,
+    arg0_type: TrivialRegisterPassable, //,
     nr: IntLiteral,
-    result_type: AnyTrivialRegType,
+    result_type: TrivialRegisterPassable,
     /,
     *,
     has_side_effect: Bool = True,
     uses_memory: Bool = True,
 ](arg0: arg0_type) -> result_type:
     """Generates assembly via inline for syscall with 1 arg."""
-    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime has_out = not _type_is_eq[result_type, NoneType]()
     comptime out = "={rax},0" if has_out else "{rax}"
     comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
@@ -64,17 +62,17 @@ fn syscall[
 
 @always_inline("nodebug")
 fn syscall[
-    arg0_type: AnyTrivialRegType,
-    arg1_type: AnyTrivialRegType, //,
+    arg0_type: TrivialRegisterPassable,
+    arg1_type: TrivialRegisterPassable, //,
     nr: IntLiteral,
-    result_type: AnyTrivialRegType,
+    result_type: TrivialRegisterPassable,
     /,
     *,
     has_side_effect: Bool = True,
     uses_memory: Bool = True,
 ](arg0: arg0_type, arg1: arg1_type) -> result_type:
     """Generates assembly via inline for syscall with 2 args."""
-    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime has_out = not _type_is_eq[result_type, NoneType]()
     comptime out = "={rax},0" if has_out else "{rax}"
     comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
@@ -92,18 +90,18 @@ fn syscall[
 
 @always_inline("nodebug")
 fn syscall[
-    arg0_type: AnyTrivialRegType,
-    arg1_type: AnyTrivialRegType,
-    arg2_type: AnyTrivialRegType, //,
+    arg0_type: TrivialRegisterPassable,
+    arg1_type: TrivialRegisterPassable,
+    arg2_type: TrivialRegisterPassable, //,
     nr: IntLiteral,
-    result_type: AnyTrivialRegType,
+    result_type: TrivialRegisterPassable,
     /,
     *,
     has_side_effect: Bool = True,
     uses_memory: Bool = True,
 ](arg0: arg0_type, arg1: arg1_type, arg2: arg2_type) -> result_type:
     """Generates assembly via inline for syscall with 3 args."""
-    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime has_out = not _type_is_eq[result_type, NoneType]()
     comptime out = "={rax},0" if has_out else "{rax}"
     comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
@@ -121,12 +119,12 @@ fn syscall[
 
 @always_inline("nodebug")
 fn syscall[
-    arg0_type: AnyTrivialRegType,
-    arg1_type: AnyTrivialRegType,
-    arg2_type: AnyTrivialRegType,
-    arg3_type: AnyTrivialRegType, //,
+    arg0_type: TrivialRegisterPassable,
+    arg1_type: TrivialRegisterPassable,
+    arg2_type: TrivialRegisterPassable,
+    arg3_type: TrivialRegisterPassable, //,
     nr: IntLiteral,
-    result_type: AnyTrivialRegType,
+    result_type: TrivialRegisterPassable,
     /,
     *,
     has_side_effect: Bool = True,
@@ -135,7 +133,7 @@ fn syscall[
     arg0: arg0_type, arg1: arg1_type, arg2: arg2_type, arg3: arg3_type
 ) -> result_type:
     """Generates assembly via inline for syscall with 4 args."""
-    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime has_out = not _type_is_eq[result_type, NoneType]()
     comptime out = "={rax},0" if has_out else "{rax}"
     comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
@@ -153,13 +151,13 @@ fn syscall[
 
 @always_inline("nodebug")
 fn syscall[
-    arg0_type: AnyTrivialRegType,
-    arg1_type: AnyTrivialRegType,
-    arg2_type: AnyTrivialRegType,
-    arg3_type: AnyTrivialRegType,
-    arg4_type: AnyTrivialRegType, //,
+    arg0_type: TrivialRegisterPassable,
+    arg1_type: TrivialRegisterPassable,
+    arg2_type: TrivialRegisterPassable,
+    arg3_type: TrivialRegisterPassable,
+    arg4_type: TrivialRegisterPassable, //,
     nr: IntLiteral,
-    result_type: AnyTrivialRegType,
+    result_type: TrivialRegisterPassable,
     /,
     *,
     has_side_effect: Bool = True,
@@ -172,7 +170,7 @@ fn syscall[
     arg4: arg4_type,
 ) -> result_type:
     """Generates assembly via inline for syscall with 5 args."""
-    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime has_out = not _type_is_eq[result_type, NoneType]()
     comptime out = "={rax},0" if has_out else "{rax}"
     comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[
@@ -190,14 +188,14 @@ fn syscall[
 
 @always_inline("nodebug")
 fn syscall[
-    arg0_type: AnyTrivialRegType,
-    arg1_type: AnyTrivialRegType,
-    arg2_type: AnyTrivialRegType,
-    arg3_type: AnyTrivialRegType,
-    arg4_type: AnyTrivialRegType,
-    arg5_type: AnyTrivialRegType, //,
+    arg0_type: TrivialRegisterPassable,
+    arg1_type: TrivialRegisterPassable,
+    arg2_type: TrivialRegisterPassable,
+    arg3_type: TrivialRegisterPassable,
+    arg4_type: TrivialRegisterPassable,
+    arg5_type: TrivialRegisterPassable, //,
     nr: IntLiteral,
-    result_type: AnyTrivialRegType,
+    result_type: TrivialRegisterPassable,
     /,
     *,
     has_side_effect: Bool = True,
@@ -211,7 +209,7 @@ fn syscall[
     arg5: arg5_type,
 ) -> result_type:
     """Generates assembly via inline for syscall with 6 args."""
-    comptime has_out = not _mlirtype_is_eq[result_type, NoneType]()
+    comptime has_out = not _type_is_eq[result_type, NoneType]()
     comptime out = "={rax},0" if has_out else "{rax}"
     comptime mem = ",~{rcx},~{r11},~{memory}" if uses_memory else ",~{rcx},~{r11}"
     return inlined_assembly[

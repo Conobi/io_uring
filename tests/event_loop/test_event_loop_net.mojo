@@ -20,9 +20,9 @@ struct NetCounter(CompletionHandler):
         self.send_result = -1
         self.recv_result = -1
 
-    fn __moveinit__(out self, deinit existing: Self):
-        self.send_result = existing.send_result
-        self.recv_result = existing.recv_result
+    fn __moveinit__(out self, deinit take: Self):
+        self.send_result = take.send_result
+        self.recv_result = take.recv_result
 
     fn on_complete(
         mut self, token: UInt64, result: Int32, flags: IoUringCqeFlags

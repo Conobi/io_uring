@@ -3,8 +3,7 @@ from linux_raw.x86_64.errno import *
 from memory import UnsafePointer
 
 
-@register_passable("trivial")
-struct Errno(Stringable):
+struct Errno(TrivialRegisterPassable, Writable):
     """The error type for `mojix` APIs.
     It only holds an OS error number, and no extra error info.
 
@@ -222,13 +221,16 @@ struct Errno(Stringable):
     # ===-------------------------------------------------------------------===#
 
     @always_inline
-    fn __str__(self) -> String:
-        """Converts Errno to a string representation.
+    fn write_to[W: Writer](self, mut writer: W):
+        """Writes Errno to a writer.
 
-        Returns:
-            A String of the error number.
+        Parameters:
+            W: The type of writer.
+
+        Args:
+            writer: The writer to write to.
         """
-        return String(self.id)
+        writer.write(self.id)
 
 
 @always_inline("nodebug")

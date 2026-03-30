@@ -48,8 +48,7 @@ struct Params(Defaultable, ImplicitlyCopyable, Movable):
         return self._dontfork
 
 
-@register_passable("trivial")
-struct Entries:
+struct Entries(TrivialRegisterPassable):
     var sq_entries: UInt32
     var cq_entries: UInt32
 

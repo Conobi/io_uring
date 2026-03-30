@@ -6,7 +6,7 @@ from mojix.ctypes import c_void
 from memory import UnsafePointer
 
 
-trait CompletionHandler(Movable):
+trait CompletionHandler(Movable, ImplicitlyDestructible):
     fn on_complete(mut self, token: UInt64, result: Int32, flags: IoUringCqeFlags):
         ...
 

@@ -113,16 +113,16 @@ struct IoUring[
         self.fd^.__del__()
 
     @always_inline
-    fn __moveinit__(out self, deinit existing: Self):
+    fn __moveinit__(out self, deinit take: Self):
         """Moves data of an existing IoUring into a new one.
 
         Args:
-            existing: The existing IoUring.
+            take: The existing IoUring.
         """
-        self._sq = existing._sq^
-        self._cq = existing._cq^
-        self.fd = existing.fd^
-        self.mem = existing.mem^
+        self._sq = take._sq^
+        self._cq = take._cq^
+        self.fd = take.fd^
+        self.mem = take.mem^
 
     # ===-------------------------------------------------------------------===#
     # Methods

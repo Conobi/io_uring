@@ -6,8 +6,7 @@ from testing import assert_equal, assert_raises
 
 
 @fieldwise_init
-@register_passable("trivial")
-struct OpQueue:
+struct OpQueue(TrivialRegisterPassable):
     var size: UInt
 
     @always_inline

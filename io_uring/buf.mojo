@@ -100,20 +100,20 @@ struct BufRing:
         debug_assert(res == 0, "failed to unregister buffer ring")
 
     @always_inline
-    fn __moveinit__(out self, deinit existing: Self):
+    fn __moveinit__(out self, deinit take: Self):
         """Moves data of an existing BufRing into a new one.
 
         Args:
-            existing: The existing BufRing.
+            take: The existing BufRing.
         """
-        self._mem = existing._mem^
-        self._tail_ptr = existing._tail_ptr
-        self._tail = existing._tail
-        self._mask = existing._mask
-        self._buf_ptr = existing._buf_ptr
-        self.entries = existing.entries
-        self.entry_size = existing.entry_size
-        self.bgid = existing.bgid
+        self._mem = take._mem^
+        self._tail_ptr = take._tail_ptr
+        self._tail = take._tail
+        self._mask = take._mask
+        self._buf_ptr = take._buf_ptr
+        self.entries = take.entries
+        self.entry_size = take.entry_size
+        self.bgid = take.bgid
 
     # ===------------------------------------------------------------------===#
     # Operator dunders
@@ -146,8 +146,7 @@ struct BufRing:
         return UInt16((flags >> IORING_CQE_BUFFER_SHIFT).value)
 
 
-@register_passable
-struct BufRingPtr[ring_origin: MutOrigin]:
+struct BufRingPtr[ring_origin: MutOrigin](RegisterPassable):
     var _ring: Pointer[BufRing, Self.ring_origin]
 
     # ===------------------------------------------------------------------=== #
@@ -211,8 +210,7 @@ struct BufRingPtr[ring_origin: MutOrigin]:
         self.unsafe_recycle(index=BufRing.flags_to_index(flags))
 
 
-@register_passable
-struct Buf[buf_origin: MutOrigin, ring_origin: MutOrigin]:
+struct Buf[buf_origin: MutOrigin, ring_origin: MutOrigin](RegisterPassable):
     var buf_ptr: UnsafePointer[c_void, StaticConstantOrigin]
     var len: UInt32
     var index: UInt16

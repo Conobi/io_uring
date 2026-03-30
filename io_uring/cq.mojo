@@ -65,21 +65,21 @@ struct Cq[type: CQE](Movable, Sized, Boolable):
         self.cqe_tail = self._tail[]
 
     @always_inline
-    fn __moveinit__(out self, deinit existing: Self):
+    fn __moveinit__(out self, deinit take: Self):
         """Moves data of an existing Cq into a new one.
 
         Args:
-            existing: The existing Cq.
+            take: The existing Cq.
         """
-        self._head = existing._head
-        self._tail = existing._tail
-        self.flags = existing.flags
-        self.overflow = existing.overflow
-        self.cqes = existing.cqes
-        self.cqe_head = existing.cqe_head
-        self.cqe_tail = existing.cqe_tail
-        self.ring_mask = existing.ring_mask
-        self.ring_entries = existing.ring_entries
+        self._head = take._head
+        self._tail = take._tail
+        self.flags = take.flags
+        self.overflow = take.overflow
+        self.cqes = take.cqes
+        self.cqe_head = take.cqe_head
+        self.cqe_tail = take.cqe_tail
+        self.ring_mask = take.ring_mask
+        self.ring_entries = take.ring_entries
 
     # ===-------------------------------------------------------------------===#
     # Trait implementations
@@ -120,8 +120,7 @@ struct Cq[type: CQE](Movable, Sized, Boolable):
         return _atomic_load[AtomicOrdering.ACQUIRE](self._tail)
 
 
-@register_passable
-struct CqPtr[type: CQE, cq_origin: MutOrigin](Sized, Boolable):
+struct CqPtr[type: CQE, cq_origin: MutOrigin](RegisterPassable, Sized, Boolable):
     var cq: Pointer[Cq[Self.type], Self.cq_origin]
 
     # ===------------------------------------------------------------------=== #

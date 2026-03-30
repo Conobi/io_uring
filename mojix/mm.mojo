@@ -130,8 +130,7 @@ fn madvise(
     unsafe_decode_none(res)
 
 
-@register_passable("trivial")
-struct MapFlags(Defaultable):
+struct MapFlags(TrivialRegisterPassable, Defaultable):
     """`MAP_*` flags for use with `mmap` and `mmap_anonymous`."""
 
     comptime SHARED = Self(MAP_SHARED)
@@ -184,8 +183,7 @@ struct MapFlags(Defaultable):
         self = self | rhs
 
 
-@register_passable("trivial")
-struct ProtFlags(Defaultable):
+struct ProtFlags(TrivialRegisterPassable, Defaultable):
     """`PROT_*` flags for use with `mmap`."""
 
     comptime NONE = Self(PROT_NONE)
@@ -217,8 +215,7 @@ struct ProtFlags(Defaultable):
         return self.value | rhs.value
 
 
-@register_passable("trivial")
-struct Advice:
+struct Advice(TrivialRegisterPassable):
     """`POSIX_MADV_*` constants for use with `madvise`."""
 
     comptime NORMAL = Self(unsafe_id=MADV_NORMAL)

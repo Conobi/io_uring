@@ -13,10 +13,10 @@ struct Counter(CompletionHandler):
         self.last_token = 0
         self.last_result = 0
 
-    fn __moveinit__(out self, deinit existing: Self):
-        self.count = existing.count
-        self.last_token = existing.last_token
-        self.last_result = existing.last_result
+    fn __moveinit__(out self, deinit take: Self):
+        self.count = take.count
+        self.last_token = take.last_token
+        self.last_result = take.last_result
 
     fn on_complete(
         mut self, token: UInt64, result: Int32, flags: IoUringCqeFlags

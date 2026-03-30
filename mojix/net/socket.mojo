@@ -1,4 +1,4 @@
-from .syscalls import _socket, _bind, _listen, _socketpair
+from .syscalls import _socket, _bind, _listen, _socketpair, _setsockopt
 from .types import (
     Backlog,
     AddrFamily,
@@ -10,6 +10,7 @@ from .types import (
     SocketAddrV4,
 )
 from mojix.fd import OwnedFd, FileDescriptor
+from mojix.ctypes import c_int, c_uint, c_void
 
 
 @always_inline
@@ -84,3 +85,17 @@ fn socketpair(
     [Linux]: https://man7.org/linux/man-pages/man2/socketpair.2.html.
     """
     return _socketpair(domain, type, SocketFlags(), Protocol())
+
+
+@always_inline
+fn setsockopt[Fd: FileDescriptor](
+    fd: Fd,
+    level: c_int,
+    optname: c_int,
+    optval: UnsafePointer[c_void, StaticConstantOrigin],
+    optlen: c_uint,
+) raises:
+    """Sets a socket option.
+    [Linux]: https://man7.org/linux/man-pages/man2/setsockopt.2.html.
+    """
+    _setsockopt(fd, level, optname, optval, optlen)

@@ -2,8 +2,7 @@ from .ctypes import c_uint
 from linux_raw.x86_64.general import *
 
 
-@register_passable("trivial")
-struct ReadWriteFlags:
+struct ReadWriteFlags(TrivialRegisterPassable):
     """`RWF_*` constants for use with `preadv2` and `pwritev2`."""
 
     comptime HIPRI = Self(RWF_HIPRI)

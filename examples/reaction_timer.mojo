@@ -55,9 +55,9 @@ struct ReactionGame(CompletionHandler):
         self.results = List[Int64]()
         self.start_ns = 0
 
-    fn __moveinit__(out self, deinit existing: Self):
-        self.results = existing.results^
-        self.start_ns = existing.start_ns
+    fn __moveinit__(out self, deinit take: Self):
+        self.results = take.results^
+        self.start_ns = take.start_ns
 
     fn on_complete(
         mut self, token: UInt64, result: Int32, flags: IoUringCqeFlags

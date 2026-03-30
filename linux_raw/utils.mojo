@@ -7,11 +7,10 @@ fn is_x86_64() -> Bool:
     return is_64bit()  # Always x86_64 on this platform
 
 
-@register_passable("trivial")
 struct DTypeArray[
     dtype: DType,
     size: Int,
-](Sized, Movable, ImplicitlyCopyable, Defaultable):
+](TrivialRegisterPassable, Sized, Movable, ImplicitlyCopyable, Defaultable):
     """A fixed size sequence of DType elements.
 
     Parameters:
