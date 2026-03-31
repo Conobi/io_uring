@@ -1,7 +1,7 @@
 from .ctypes import c_void
 from .fd import UnsafeFd, IoUringFileDescriptor, OwnedFd
 from .errno import unsafe_decode_result
-from .utils import _aligned_u64, _align_eq, _size_eq, StaticMutOrigin
+from .utils import _aligned_u64, _align_eq, _size_eq
 from linux_raw.x86_64.io_uring import *
 from linux_raw.x86_64.general import (
     __NR_io_uring_setup,
@@ -903,7 +903,7 @@ struct RegisterArg[origin: MutOrigin](TrivialRegisterPassable):
 
 
 struct NoRegisterArg:
-    comptime ENABLE_RINGS = RegisterArg[StaticMutOrigin](
+    comptime ENABLE_RINGS = RegisterArg[MutAnyOrigin](
         opcode=IoUringRegisterOp.REGISTER_ENABLE_RINGS,
         arg_unsafe_ptr=UnsafePointer[c_void, StaticConstantOrigin](unsafe_from_address=0),
         nr_args=0,
