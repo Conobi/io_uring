@@ -18,3 +18,9 @@ magic.lock
 
 # Mojo packages
 *.mojopkg
+
+# Python / uv
+__pycache__/
+*.py[cod]
+dist/
+.venv/
